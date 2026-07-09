@@ -1,4 +1,6 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { apiClient } from "@/lib/axios"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -6,16 +8,92 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Building2, Globe, Lock, Mail, ShieldCheck, Palette, Save } from "lucide-react"
 
+interface SystemSettings {
+  platform_name: string
+  support_email: string
+  maintenance_mode: boolean
+  max_upload_size_mb: number
+  allow_employer_registration: boolean
+  // frontend only state
+  timezone?: string
+  lang?: string
+}
+
 export default function SettingsPage() {
-  const [isLoading, setIsLoading] = useState(false)
+  const queryClient = useQueryClient()
+  const [formData, setFormData] = useState<SystemSettings>({
+    platform_name: "",
+    support_email: "",
+    maintenance_mode: false,
+    max_upload_size_mb: 5,
+    allow_employer_registration: true,
+    timezone: "Asia/Jakarta",
+    lang: "id"
+  })
+
+  const { data: settings, isLoading: isFetching } = useQuery({
+    queryKey: ["admin-settings"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/settings")
+      return res.data?.data
+    }
+  })
+
+  // Sync query data to local state
+  useEffect(() => {
+    if (settings) {
+      setFormData(prev => ({
+        ...prev,
+        platform_name: settings.platform_name || prev.platform_name,
+        support_email: settings.support_email || prev.support_email,
+        maintenance_mode: settings.maintenance_mode ?? prev.maintenance_mode,
+        max_upload_size_mb: settings.max_upload_size_mb || prev.max_upload_size_mb,
+        allow_employer_registration: settings.allow_employer_registration ?? prev.allow_employer_registration
+      }))
+    }
+  }, [settings])
+
+  const mutation = useMutation({
+    mutationFn: async (newSettings: Partial<SystemSettings>) => {
+      const payload = {
+        platform_name: newSettings.platform_name,
+        support_email: newSettings.support_email,
+        maintenance_mode: newSettings.maintenance_mode,
+        max_upload_size_mb: newSettings.max_upload_size_mb,
+        allow_employer_registration: newSettings.allow_employer_registration
+      }
+      await apiClient.put("/admin/settings", payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-settings"] })
+      alert("Settings saved successfully!")
+    },
+    onError: () => {
+      alert("Failed to save settings.")
+    }
+  })
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
+    mutation.mutate(formData)
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === "checkbox" ? (e.target as HTMLInputElement).checked : 
+              type === "number" ? parseInt(value) : value
+    }))
+  }
+
+  if (isFetching) {
+    return (
+      <div className="p-8 space-y-6 animate-pulse">
+        <div className="h-10 w-64 bg-muted rounded"></div>
+        <div className="h-[400px] bg-muted rounded-xl"></div>
+      </div>
+    )
   }
 
   return (
@@ -58,38 +136,100 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2 max-w-md">
-                  <Label htmlFor="appName">Application Name</Label>
-                  <Input id="appName" defaultValue="Cari Kerja" />
+                  <Label htmlFor="platform_name">Platform Name</Label>
+                  <Input 
+                    id="platform_name" 
+                    name="platform_name"
+                    value={formData.platform_name}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
                 <div className="space-y-2 max-w-md">
-                  <Label htmlFor="tagline">Platform Tagline</Label>
-                  <Input id="tagline" defaultValue="Portal Lowongan Kerja Terpercaya" />
+                  <Label htmlFor="support_email">Support Email</Label>
+                  <Input 
+                    id="support_email" 
+                    type="email"
+                    name="support_email"
+                    value={formData.support_email}
+                    onChange={handleChange}
+                    required
+                  />
                 </div>
-                <div className="space-y-2 max-w-md">
-                  <Label htmlFor="timezone">Default Timezone</Label>
-                  <select 
-                    id="timezone" 
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="Asia/Jakarta">Asia/Jakarta (WIB)</option>
-                    <option value="Asia/Makassar">Asia/Makassar (WITA)</option>
-                    <option value="Asia/Jayapura">Asia/Jayapura (WIT)</option>
-                  </select>
+                
+                <div className="space-y-4 max-w-md border-t pt-6">
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Allow Employer Registration</Label>
+                      <p className="text-sm text-muted-foreground">Employers can register independently.</p>
+                    </div>
+                    <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                      <input 
+                        type="checkbox" 
+                        name="allow_employer_registration" 
+                        id="allow_employer_registration" 
+                        checked={formData.allow_employer_registration}
+                        onChange={handleChange}
+                        className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-primary checked:right-0 checked:border-primary duration-200"
+                        style={{ right: formData.allow_employer_registration ? '0' : '1rem' }}
+                      />
+                      <label htmlFor="allow_employer_registration" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${formData.allow_employer_registration ? 'bg-primary' : 'bg-muted'}`}></label>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-4 border rounded-lg border-danger/50 bg-danger/5">
+                    <div className="space-y-0.5">
+                      <Label className="text-base text-danger">Maintenance Mode</Label>
+                      <p className="text-sm text-muted-foreground">Take the platform offline for updates.</p>
+                    </div>
+                    <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                      <input 
+                        type="checkbox" 
+                        name="maintenance_mode" 
+                        id="maintenance_mode" 
+                        checked={formData.maintenance_mode}
+                        onChange={handleChange}
+                        className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-danger duration-200"
+                        style={{ right: formData.maintenance_mode ? '0' : '1rem' }}
+                      />
+                      <label htmlFor="maintenance_mode" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${formData.maintenance_mode ? 'bg-danger' : 'bg-muted'}`}></label>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2 max-w-md">
-                  <Label htmlFor="lang">Default Language</Label>
-                  <select 
-                    id="lang" 
-                    className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <option value="id">Bahasa Indonesia</option>
-                    <option value="en">English (US)</option>
-                  </select>
+
+                <div className="grid grid-cols-2 gap-4 max-w-md border-t pt-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="timezone">Default Timezone</Label>
+                    <select 
+                      id="timezone" 
+                      name="timezone"
+                      value={formData.timezone}
+                      onChange={handleChange}
+                      className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="Asia/Jakarta">Asia/Jakarta (WIB)</option>
+                      <option value="Asia/Makassar">Asia/Makassar (WITA)</option>
+                      <option value="Asia/Jayapura">Asia/Jayapura (WIT)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lang">Default Language</Label>
+                    <select 
+                      id="lang" 
+                      name="lang"
+                      value={formData.lang}
+                      onChange={handleChange}
+                      className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="id">Bahasa Indonesia</option>
+                      <option value="en">English (US)</option>
+                    </select>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="border-t bg-muted/20 px-6 py-4">
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? "Saving..." : (
+                <Button type="submit" disabled={mutation.isPending}>
+                  {mutation.isPending ? "Saving..." : (
                     <>
                       <Save className="h-4 w-4 mr-2" /> Save Changes
                     </>
@@ -117,12 +257,6 @@ export default function SettingsPage() {
                     <span className="text-sm">Click to upload logo</span>
                   </div>
                 </div>
-                <div className="space-y-2 flex-1 max-w-sm">
-                  <Label>Favicon</Label>
-                  <div className="h-32 w-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-muted-foreground hover:bg-muted/50 cursor-pointer transition-colors">
-                    <span className="text-sm">Upload 32x32</span>
-                  </div>
-                </div>
               </div>
               
               <div className="space-y-2 max-w-md pt-4">
@@ -141,13 +275,11 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
+        {/* Security & other tabs */}
         <TabsContent value="security" className="m-0">
           <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle>Security Configuration</CardTitle>
-              <CardDescription>
-                Manage password policies and two-factor authentication.
-              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4 max-w-md">
@@ -157,29 +289,15 @@ export default function SettingsPage() {
                     <p className="text-sm text-muted-foreground">Minimum 8 characters, uppercase, and symbols.</p>
                   </div>
                   <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
-                    <input type="checkbox" name="toggle" id="toggle1" checked readOnly className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-primary translate-x-4"/>
+                    <input type="checkbox" name="toggle" id="toggle1" checked readOnly className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-primary" style={{ right: 0 }}/>
                     <label htmlFor="toggle1" className="toggle-label block overflow-hidden h-6 rounded-full bg-primary cursor-pointer"></label>
                   </div>
-                </div>
-                
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="space-y-0.5">
-                    <Label className="text-base">Session Timeout</Label>
-                    <p className="text-sm text-muted-foreground">Automatically log out inactive users.</p>
-                  </div>
-                  <select className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                    <option>15 minutes</option>
-                    <option>30 minutes</option>
-                    <option>1 hour</option>
-                    <option>24 hours</option>
-                  </select>
                 </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
         
-        {/* Placeholder for other tabs to keep file size reasonable */}
         <TabsContent value="company" className="m-0">
           <Card className="border-none shadow-sm"><CardContent className="p-6">Company settings coming soon...</CardContent></Card>
         </TabsContent>

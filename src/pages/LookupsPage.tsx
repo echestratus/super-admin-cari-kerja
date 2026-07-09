@@ -1,0 +1,232 @@
+import { useState } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { apiClient } from "@/lib/axios"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { DataTable } from "@/components/ui/data-table"
+import type { ColumnDef } from "@/components/ui/data-table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Plus, Edit2, Trash2 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+
+const LOOKUP_TABLES = [
+  { id: "categories", label: "Job Categories" },
+  { id: "industries", label: "Industries" },
+  { id: "genders", label: "Genders" },
+  { id: "nationalities", label: "Nationalities" },
+  { id: "employment_types", label: "Employment Types" },
+  { id: "experience_levels", label: "Experience Levels" },
+  { id: "skills", label: "Skills" },
+]
+
+export default function LookupsPage() {
+  const queryClient = useQueryClient()
+  const [activeTable, setActiveTable] = useState(LOOKUP_TABLES[0].id)
+  
+  // Modal states
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState<any>(null)
+  const [formData, setFormData] = useState({ name: "" })
+
+  const { data: records = [], isLoading } = useQuery({
+    queryKey: ["lookups", activeTable],
+    queryFn: async () => {
+      const res = await apiClient.get(`/admin/lookups/${activeTable}`)
+      return res.data?.data || []
+    }
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: { id?: string; name: string }) => {
+      if (data.id) {
+        return apiClient.put(`/admin/lookups/${activeTable}/${data.id}`, { name: data.name })
+      }
+      return apiClient.post(`/admin/lookups/${activeTable}`, { name: data.name })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lookups", activeTable] })
+      setIsFormOpen(false)
+    }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.delete(`/admin/lookups/${activeTable}/${id}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lookups", activeTable] })
+      setIsDeleteOpen(false)
+    }
+  })
+
+  const handleOpenForm = (item?: any) => {
+    if (item) {
+      setEditingItem(item)
+      setFormData({ name: item.name || "" })
+    } else {
+      setEditingItem(null)
+      setFormData({ name: "" })
+    }
+    setIsFormOpen(true)
+  }
+
+  const handleDeleteClick = (item: any) => {
+    setEditingItem(item)
+    setIsDeleteOpen(true)
+  }
+
+  const columns: ColumnDef<any>[] = [
+    {
+      header: "ID",
+      accessorKey: "id",
+      className: "w-[100px]"
+    },
+    {
+      header: "Name / Value",
+      accessorKey: "name",
+    },
+    {
+      header: "Actions",
+      className: "text-right w-[150px]",
+      cell: (item) => (
+        <div className="flex justify-end gap-2">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+            onClick={() => handleOpenForm(item)}
+          >
+            <Edit2 className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            className="text-muted-foreground hover:text-danger hover:bg-danger/10"
+            onClick={() => handleDeleteClick(item)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    }
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-3xl font-bold tracking-tight">Lookup Management</h2>
+        <p className="text-muted-foreground">Manage reference data tables used across the platform.</p>
+      </div>
+
+      <div className="flex justify-between items-center bg-card p-4 rounded-lg border">
+        <div className="flex items-center gap-4 w-full max-w-sm">
+          <Label className="whitespace-nowrap font-semibold">Select Table:</Label>
+          <Select value={activeTable} onValueChange={setActiveTable}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select table" />
+            </SelectTrigger>
+            <SelectContent>
+              {LOOKUP_TABLES.map(t => (
+                <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button onClick={() => handleOpenForm()} className="gap-2">
+          <Plus className="h-4 w-4" /> Add New
+        </Button>
+      </div>
+
+      <Card className="border-none shadow-sm">
+        <CardHeader className="px-0 pt-0">
+          <CardTitle>Data Records</CardTitle>
+          <CardDescription>Records for the currently selected lookup table.</CardDescription>
+        </CardHeader>
+        <CardContent className="px-0">
+          <DataTable 
+            columns={columns} 
+            data={records} 
+            isLoading={isLoading} 
+          />
+        </CardContent>
+      </Card>
+
+      {/* Form Dialog */}
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingItem ? "Edit Record" : "Add New Record"}</DialogTitle>
+            <DialogDescription>
+              {editingItem ? "Update the reference value." : "Add a new reference value to the table."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Name/Value
+              </Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ name: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => saveMutation.mutate({ id: editingItem?.id, name: formData.name })}
+              disabled={saveMutation.isPending || !formData.name.trim()}
+            >
+              {saveMutation.isPending ? "Saving..." : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the record 
+              <strong className="mx-1 text-foreground">"{editingItem?.name}"</strong> 
+              from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => editingItem?.id && deleteMutation.mutate(editingItem.id)}
+              className="bg-danger text-danger-foreground hover:bg-danger/90"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}

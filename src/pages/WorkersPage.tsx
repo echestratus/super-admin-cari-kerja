@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
-import { Building2, CheckCircle2, XCircle, Edit2, Trash2 } from "lucide-react"
+import { User, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import {
   Dialog,
@@ -29,15 +29,16 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 
-interface Employer {
+interface Worker {
   id: string
-  company_name: string
+  name: string
   email: string
-  is_verified: boolean
+  gender?: string
+  date_of_birth?: string
 }
 
 interface PaginatedResponse {
-  data: Employer[]
+  data: Worker[]
   meta: {
     page: number
     limit: number
@@ -46,24 +47,25 @@ interface PaginatedResponse {
   }
 }
 
-export default function EmployersPage() {
+export default function WorkersPage() {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
   const pageSize = 10
 
-  const [editingEmployer, setEditingEmployer] = useState<Employer | null>(null)
-  const [deletingEmployer, setDeletingEmployer] = useState<Employer | null>(null)
+  const [editingWorker, setEditingWorker] = useState<Worker | null>(null)
+  const [deletingWorker, setDeletingWorker] = useState<Worker | null>(null)
   const [formData, setFormData] = useState({
-    company_name: "",
-    email: "",
+    name: "",
+    gender: "",
+    date_of_birth: ""
   })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
-    queryKey: ["employers", page, pageSize, debouncedSearch],
+    queryKey: ["workers", page, pageSize, debouncedSearch],
     queryFn: async () => {
-      const res = await apiClient.get("/admin/employers", {
+      const res = await apiClient.get("/admin/workers", {
         params: {
           page,
           limit: pageSize,
@@ -74,72 +76,72 @@ export default function EmployersPage() {
     },
   })
 
-  const employers = response?.data || []
-  const totalEmployers = response?.meta?.totalData || 0
-
-  const verifyMutation = useMutation({
-    mutationFn: async ({ id, is_verified }: { id: string, is_verified: boolean }) => {
-      const action = is_verified ? "unverify" : "verify"
-      await apiClient.put(`/admin/employers/${id}/verify`, { action })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["employers"] })
-    }
-  })
+  const workers = response?.data || []
+  const totalWorkers = response?.meta?.totalData || 0
 
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiClient.put(`/admin/employers/${id}`, formData)
+      return apiClient.put(`/admin/workers/${id}`, formData)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["employers"] })
-      setEditingEmployer(null)
+      queryClient.invalidateQueries({ queryKey: ["workers"] })
+      setEditingWorker(null)
     }
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiClient.delete(`/admin/employers/${id}`)
+      return apiClient.delete(`/admin/workers/${id}`)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["employers"] })
-      setDeletingEmployer(null)
+      queryClient.invalidateQueries({ queryKey: ["workers"] })
+      setDeletingWorker(null)
     }
   })
 
-  const handleEditClick = (employer: Employer) => {
-    setEditingEmployer(employer)
+  const handleEditClick = (worker: Worker) => {
+    setEditingWorker(worker)
     setFormData({
-      company_name: employer.company_name || "",
-      email: employer.email || "",
+      name: worker.name || "",
+      gender: worker.gender || "",
+      date_of_birth: worker.date_of_birth ? worker.date_of_birth.split("T")[0] : "",
     })
   }
 
-  const columns: ColumnDef<Employer>[] = [
+  const columns: ColumnDef<Worker>[] = [
     {
-      header: "Company Details",
+      header: "Worker Details",
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-md bg-secondary/10 flex items-center justify-center text-secondary font-medium">
-            <Building2 className="h-4 w-4" />
+            <User className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground">{item.company_name || "Unknown Company"}</div>
+            <div className="font-medium text-foreground">{item.name || "Unknown Worker"}</div>
             <div className="text-sm text-muted-foreground">{item.email}</div>
           </div>
         </div>
       ),
     },
     {
-      header: "Status",
+      header: "Gender",
       cell: (item) => (
-        <Badge 
-          variant={item.is_verified ? "default" : "secondary"}
-          className={item.is_verified ? "bg-success/10 text-success hover:bg-success/20 border-transparent" : "bg-warning/10 text-warning hover:bg-warning/20 border-transparent"}
-        >
-          {item.is_verified ? "Verified" : "Pending Verification"}
+        <Badge variant="outline" className="bg-background capitalize">
+          {item.gender || "Not Specified"}
         </Badge>
       ),
+    },
+    {
+      header: "Age",
+      cell: (item) => {
+        let age = "N/A"
+        if (item.date_of_birth) {
+          const diffMs = Date.now() - new Date(item.date_of_birth).getTime()
+          const ageDt = new Date(diffMs)
+          age = String(Math.abs(ageDt.getUTCFullYear() - 1970))
+        }
+        return <span className="text-sm">{age}</span>
+      },
     },
     {
       header: "Actions",
@@ -157,19 +159,8 @@ export default function EmployersPage() {
           <Button 
             variant="ghost" 
             size="sm"
-            className={item.is_verified ? "text-warning hover:text-warning hover:bg-warning/10" : "text-success hover:text-success hover:bg-success/10"}
-            onClick={() => verifyMutation.mutate({ id: item.id, is_verified: item.is_verified })}
-            disabled={verifyMutation.isPending}
-            title={item.is_verified ? "Unverify" : "Verify"}
-          >
-            {item.is_verified ? <XCircle className="h-4 w-4 mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-            {item.is_verified ? "Unverify" : "Verify"}
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm"
             className="text-muted-foreground hover:text-danger hover:bg-danger/10"
-            onClick={() => setDeletingEmployer(item)}
+            onClick={() => setDeletingWorker(item)}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -181,68 +172,77 @@ export default function EmployersPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2">
-        <h2 className="text-3xl font-bold tracking-tight">Employers Management</h2>
-        <p className="text-muted-foreground">Verify and manage corporate accounts and recruiter profiles.</p>
+        <h2 className="text-3xl font-bold tracking-tight">Workers Management</h2>
+        <p className="text-muted-foreground">Monitor and manage job seeker profiles.</p>
       </div>
 
       <Card className="border-none shadow-sm">
         <CardHeader className="px-0 pt-0">
-          <CardTitle>Registered Employers</CardTitle>
-          <CardDescription>Review company verification requests and manage existing employers.</CardDescription>
+          <CardTitle>Registered Workers</CardTitle>
+          <CardDescription>Review all job seekers registered on the platform.</CardDescription>
         </CardHeader>
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={employers} 
+            data={workers} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
               setSearchQuery(q)
               setPage(1)
             }}
-            searchPlaceholder="Search by company name or email..."
+            searchPlaceholder="Search by worker name or email..."
             pagination={{
               page,
               pageSize,
-              total: totalEmployers,
+              total: totalWorkers,
               onPageChange: setPage
             }}
           />
         </CardContent>
       </Card>
 
-      {/* Edit Employer Dialog */}
-      <Dialog open={!!editingEmployer} onOpenChange={(open) => !open && setEditingEmployer(null)}>
-        <DialogContent>
+      {/* Edit Worker Dialog */}
+      <Dialog open={!!editingWorker} onOpenChange={(open) => !open && setEditingWorker(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Edit Employer Profile</DialogTitle>
+            <DialogTitle>Edit Worker Profile</DialogTitle>
             <DialogDescription>
-              Update basic information for this corporate account.
+              Update basic information for this job seeker.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="company_name">Company Name</Label>
+              <Label htmlFor="name">Full Name</Label>
               <Input
-                id="company_name"
-                value={formData.company_name}
-                onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="gender">Gender</Label>
               <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                id="gender"
+                value={formData.gender}
+                placeholder="e.g. male, female"
+                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dob">Date of Birth</Label>
+              <Input
+                id="dob"
+                type="date"
+                value={formData.date_of_birth}
+                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingEmployer(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setEditingWorker(null)}>Cancel</Button>
             <Button 
-              onClick={() => editingEmployer && saveMutation.mutate(editingEmployer.id)}
+              onClick={() => editingWorker && saveMutation.mutate(editingWorker.id)}
               disabled={saveMutation.isPending}
             >
               {saveMutation.isPending ? "Saving..." : "Save changes"}
@@ -251,21 +251,21 @@ export default function EmployersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Employer AlertDialog */}
-      <AlertDialog open={!!deletingEmployer} onOpenChange={(open) => !open && setDeletingEmployer(null)}>
+      {/* Delete Worker AlertDialog */}
+      <AlertDialog open={!!deletingWorker} onOpenChange={(open) => !open && setDeletingWorker(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the employer account
-              <strong className="mx-1 text-foreground">"{deletingEmployer?.company_name}"</strong> 
-              and all of their associated data including jobs.
+              This action cannot be undone. This will permanently delete the worker account
+              <strong className="mx-1 text-foreground">"{deletingWorker?.email}"</strong> 
+              and all of their associated data including applications.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => deletingEmployer && deleteMutation.mutate(deletingEmployer.id)}
+              onClick={() => deletingWorker && deleteMutation.mutate(deletingWorker.id)}
               className="bg-danger text-danger-foreground hover:bg-danger/90"
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}
