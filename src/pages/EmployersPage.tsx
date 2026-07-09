@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { Building2, CheckCircle2, XCircle, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -81,9 +82,14 @@ export default function EmployersPage() {
     mutationFn: async ({ id, is_verified }: { id: string, is_verified: boolean }) => {
       const action = is_verified ? "unverify" : "verify"
       await apiClient.put(`/admin/employers/${id}/verify`, { action })
+      return action
     },
-    onSuccess: () => {
+    onSuccess: (action) => {
       queryClient.invalidateQueries({ queryKey: ["employers"] })
+      toast.success(`Employer ${action === "verify" ? "verified" : "unverified"} successfully.`)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update verification status.")
     }
   })
 
@@ -94,6 +100,10 @@ export default function EmployersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employers"] })
       setEditingEmployer(null)
+      toast.success("Employer updated successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update employer.")
     }
   })
 
@@ -104,6 +114,10 @@ export default function EmployersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employers"] })
       setDeletingEmployer(null)
+      toast.success("Employer deleted successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to delete employer.")
     }
   })
 

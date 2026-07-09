@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, Edit2, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -66,6 +67,10 @@ export default function LookupsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lookups", activeTable] })
       setIsFormOpen(false)
+      toast.success("Record saved successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to save record.")
     }
   })
 
@@ -76,6 +81,10 @@ export default function LookupsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lookups", activeTable] })
       setIsDeleteOpen(false)
+      toast.success("Record deleted successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to delete record.")
     }
   })
 

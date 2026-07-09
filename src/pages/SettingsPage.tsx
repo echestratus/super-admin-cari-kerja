@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Building2, Globe, Lock, Mail, ShieldCheck, Palette, Save } from "lucide-react"
+import { toast } from "sonner"
 
 interface SystemSettings {
   platform_name: string
@@ -66,10 +67,10 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-settings"] })
-      alert("Settings saved successfully!")
+      toast.success("Settings saved successfully!")
     },
-    onError: () => {
-      alert("Failed to save settings.")
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to save settings.")
     }
   })
 
