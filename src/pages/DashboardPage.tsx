@@ -16,8 +16,33 @@ import {
 import { useQuery } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 
+interface DashboardStats {
+  total_users: number
+  total_recruiters: number
+  total_jobs: number
+  total_applications: number
+}
+
+interface GrowthData {
+  name: string
+  users: number
+  employers?: number
+}
+
+interface JobDistribution {
+  name: string
+  value: number
+}
+
+interface Activity {
+  id: string | number
+  message: string
+  time: string
+  type: 'USER' | 'EMPLOYER' | 'JOB' | 'APPLICATION' | 'DANGER'
+}
+
 export default function DashboardPage() {
-  const { data: stats, isLoading } = useQuery({
+  const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["admin-stats"],
     queryFn: async () => {
       const res = await apiClient.get("/admin/stats")
@@ -25,31 +50,31 @@ export default function DashboardPage() {
     }
   })
 
-  const growthData = [
-    { name: "Jan", users: 400, employers: 24 },
-    { name: "Feb", users: 300, employers: 13 },
-    { name: "Mar", users: 200, employers: 98 },
-    { name: "Apr", users: 278, employers: 39 },
-    { name: "May", users: 189, employers: 48 },
-    { name: "Jun", users: 239, employers: 38 },
-    { name: "Jul", users: 349, employers: 43 },
-  ]
+  const { data: growthData = [] } = useQuery<GrowthData[]>({
+    queryKey: ["admin-growth"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/dashboard/growth")
+      return res.data?.data || []
+    }
+  })
   
-  const jobDistribution = [
-    { name: "IT & Software", value: 400 },
-    { name: "Marketing", value: 300 },
-    { name: "Finance", value: 300 },
-    { name: "Design", value: 200 },
-  ]
+  const { data: jobDistribution = [] } = useQuery<JobDistribution[]>({
+    queryKey: ["admin-job-distribution"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/dashboard/job-distribution")
+      return res.data?.data || []
+    }
+  })
+
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--warning))', 'hsl(var(--success))']
 
-  const recentActivities = [
-    { id: 1, action: "New user registered", entity: "John Doe", time: "2 minutes ago", type: "user" },
-    { id: 2, action: "Company verified", entity: "Tech Corp Inc.", time: "1 hour ago", type: "employer" },
-    { id: 3, action: "Job posted", entity: "Senior React Developer", time: "3 hours ago", type: "job" },
-    { id: 4, action: "Application submitted", entity: "Jane Smith for UI Designer", time: "5 hours ago", type: "application" },
-    { id: 5, action: "User suspended", entity: "SpamBot99", time: "1 day ago", type: "danger" },
-  ]
+  const { data: recentActivities = [] } = useQuery<Activity[]>({
+    queryKey: ["admin-activities"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/dashboard/activities")
+      return res.data?.data || []
+    }
+  })
 
   if (isLoading) {
     return (
@@ -165,16 +190,13 @@ export default function DashboardPage() {
               {recentActivities.map((activity) => (
                 <div key={activity.id} className="flex items-start gap-4">
                   <div className={`mt-0.5 h-2 w-2 rounded-full flex-shrink-0 ${
-                    activity.type === 'user' ? 'bg-primary' :
-                    activity.type === 'employer' ? 'bg-secondary' :
-                    activity.type === 'danger' ? 'bg-danger' :
+                    activity.type === 'USER' ? 'bg-primary' :
+                    activity.type === 'EMPLOYER' ? 'bg-secondary' :
+                    activity.type === 'DANGER' ? 'bg-danger' :
                     'bg-accent'
                   }`} />
                   <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">{activity.action}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {activity.entity}
-                    </p>
+                    <p className="text-sm font-medium leading-none">{activity.message}</p>
                   </div>
                   <div className="ml-auto text-xs text-muted-foreground">
                     {activity.time}
@@ -202,7 +224,7 @@ export default function DashboardPage() {
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {jobDistribution.map((_entry, index) => (
+                    {jobDistribution.map((_entry: JobDistribution, index: number) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
