@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
+import { apiClient } from "@/lib/axios"
 import {
   Table,
   TableBody,
@@ -22,11 +23,8 @@ export default function ApplicationsPage() {
   const { data: applications = [], isLoading } = useQuery({
     queryKey: ["applications"],
     queryFn: async () => {
-      return [
-        { id: "1", applicant_name: "Alice Smith", job_title: "Software Engineer", company: "Tech Corp", status: "ACCEPTED" },
-        { id: "2", applicant_name: "Bob Jones", job_title: "Product Manager", company: "Startup Inc", status: "REJECTED" },
-        { id: "3", applicant_name: "Charlie Brown", job_title: "Data Analyst", company: "Data Co", status: "PENDING" },
-      ] as Application[]
+      const res = await apiClient.get("/admin/applications")
+      return res.data?.data || []
     },
   })
 

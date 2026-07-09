@@ -1,4 +1,6 @@
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { apiClient } from "@/lib/axios"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -13,21 +15,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 interface Job {
   id: string
   title: string
-  company: string
+  company_name: string
   status: string
-  posted_date: string
+  created_at: string
 }
 
 export default function JobsPage() {
+  const queryClient = useQueryClient()
+
   const { data: jobs = [], isLoading } = useQuery({
     queryKey: ["jobs"],
     queryFn: async () => {
-      return [
-        { id: "1", title: "Software Engineer", company: "Tech Corp", status: "ACTIVE", posted_date: "2023-10-01" },
-        { id: "2", title: "Product Manager", company: "Startup Inc", status: "CLOSED", posted_date: "2023-09-15" },
-        { id: "3", title: "Data Analyst", company: "Data Co", status: "PENDING", posted_date: "2023-10-05" },
-      ] as Job[]
+      const res = await apiClient.get("/admin/jobs")
+      return res.data?.data || []
     },
+  })
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string, status: string }) => {
+      await apiClient.put(`/admin/jobs/${id}/status`, { status })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] })
+    }
   })
 
   return (
@@ -60,16 +70,45 @@ export default function JobsPage() {
               ) : (
                 jobs.map((job) => (
                   <TableRow key={job.id}>
-                    <TableCell className="font-medium">{job.title}</TableCell>
-                    <TableCell>{job.company}</TableCell>
-                    <TableCell>{job.posted_date}</TableCell>
+                    <TableCell className="font-medium">{job.title || "N/A"}</TableCell>
+                    <TableCell>{job.company_name || "N/A"}</TableCell>
+                    <TableCell>{new Date(job.created_at).toLocaleDateString()}</TableCell>
                     <TableCell>
-                      <Badge variant={job.status === "ACTIVE" ? "default" : job.status === "CLOSED" ? "secondary" : "outline"}>
+                      <Badge variant={job.status === "APPROVED" || job.status === "ACTIVE" ? "default" : job.status === "REJECTED" ? "destructive" : "secondary"}>
                         {job.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <span className="text-sm text-muted-foreground cursor-pointer hover:underline">Review</span>
+                    <TableCell className="text-right space-x-2">
+                      {job.status === "PENDING" && (
+                        <>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => statusMutation.mutate({ id: job.id, status: "APPROVED" })}
+                            disabled={statusMutation.isPending}
+                          >
+                            Approve
+                          </Button>
+                          <Button 
+                            variant="destructive" 
+                            size="sm"
+                            onClick={() => statusMutation.mutate({ id: job.id, status: "REJECTED" })}
+                            disabled={statusMutation.isPending}
+                          >
+                            Reject
+                          </Button>
+                        </>
+                      )}
+                      {job.status === "APPROVED" && (
+                        <Button 
+                          variant="secondary" 
+                          size="sm"
+                          onClick={() => statusMutation.mutate({ id: job.id, status: "ARCHIVED" })}
+                          disabled={statusMutation.isPending}
+                        >
+                          Archive
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

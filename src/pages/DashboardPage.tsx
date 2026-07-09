@@ -9,18 +9,33 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts"
-
-const data = [
-  { name: "Mon", users: 400, jobs: 240 },
-  { name: "Tue", users: 300, jobs: 139 },
-  { name: "Wed", users: 200, jobs: 980 },
-  { name: "Thu", users: 278, jobs: 390 },
-  { name: "Fri", users: 189, jobs: 480 },
-  { name: "Sat", users: 239, jobs: 380 },
-  { name: "Sun", users: 349, jobs: 430 },
-]
+import { useQuery } from "@tanstack/react-query"
+import { apiClient } from "@/lib/axios"
 
 export default function DashboardPage() {
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["admin-stats"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/stats")
+      return res.data?.data || { total_users: 0, total_recruiters: 0, total_jobs: 0, total_applications: 0 }
+    }
+  })
+
+  // Dummy chart data since there's no chart endpoint yet
+  const chartData = [
+    { name: "Mon", users: 40, jobs: 24 },
+    { name: "Tue", users: 30, jobs: 13 },
+    { name: "Wed", users: 20, jobs: 98 },
+    { name: "Thu", users: 27, jobs: 39 },
+    { name: "Fri", users: 18, jobs: 48 },
+    { name: "Sat", users: 23, jobs: 38 },
+    { name: "Sun", users: 34, jobs: 43 },
+  ]
+
+  if (isLoading) {
+    return <div className="p-8">Loading dashboard metrics...</div>
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -35,8 +50,8 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,234</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
+            <div className="text-2xl font-bold">{stats?.total_users || 0}</div>
+            <p className="text-xs text-muted-foreground">Registered workers</p>
           </CardContent>
         </Card>
         
@@ -46,8 +61,8 @@ export default function DashboardPage() {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">56</div>
-            <p className="text-xs text-muted-foreground">+3 since last week</p>
+            <div className="text-2xl font-bold">{stats?.total_recruiters || 0}</div>
+            <p className="text-xs text-muted-foreground">Registered companies</p>
           </CardContent>
         </Card>
         
@@ -57,8 +72,8 @@ export default function DashboardPage() {
             <Briefcase className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">342</div>
-            <p className="text-xs text-muted-foreground">-4% from last week</p>
+            <div className="text-2xl font-bold">{stats?.total_jobs || 0}</div>
+            <p className="text-xs text-muted-foreground">Posted job vacancies</p>
           </CardContent>
         </Card>
         
@@ -68,8 +83,8 @@ export default function DashboardPage() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8,901</div>
-            <p className="text-xs text-muted-foreground">+24% from last month</p>
+            <div className="text-2xl font-bold">{stats?.total_applications || 0}</div>
+            <p className="text-xs text-muted-foreground">Total applications submitted</p>
           </CardContent>
         </Card>
       </div>
@@ -82,7 +97,7 @@ export default function DashboardPage() {
           <CardContent className="pl-2">
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
+                <LineChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
                   <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
@@ -104,17 +119,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-8">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="flex items-center">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">New User Registered</p>
-                    <p className="text-sm text-muted-foreground">User {i} just created an account.</p>
-                  </div>
-                  <div className="ml-auto font-medium text-xs text-muted-foreground">
-                    {i * 10}m ago
-                  </div>
-                </div>
-              ))}
+              <div className="flex items-center text-sm text-muted-foreground">
+                Recent activities stream will be implemented in future phases.
+              </div>
             </div>
           </CardContent>
         </Card>

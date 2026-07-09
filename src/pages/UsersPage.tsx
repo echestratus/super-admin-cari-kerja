@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query"
-
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { apiClient } from "@/lib/axios"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -16,21 +17,28 @@ interface User {
   name: string
   email: string
   role_id: number
-  is_active: boolean
+  is_suspended: boolean
 }
 
 export default function UsersPage() {
-  // Mock data for now until backend is fully integrated
+  const queryClient = useQueryClient()
+
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: async () => {
-      // return (await apiClient.get("/users")).data
-      return [
-        { id: "1", name: "Alice Admin", email: "alice@example.com", role_id: 3, is_active: true },
-        { id: "2", name: "Bob User", email: "bob@example.com", role_id: 1, is_active: true },
-        { id: "3", name: "Charlie Banned", email: "charlie@example.com", role_id: 1, is_active: false },
-      ] as User[]
+      const res = await apiClient.get("/admin/users")
+      return res.data?.data || []
     },
+  })
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, is_suspended }: { id: string, is_suspended: boolean }) => {
+      const action = is_suspended ? "activate" : "suspend"
+      await apiClient.put(`/admin/users/${id}/status`, { action })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] })
+    }
   })
 
   return (
@@ -63,18 +71,25 @@ export default function UsersPage() {
               ) : (
                 users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
+                    <TableCell className="font-medium">{user.name || "N/A"}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      {user.role_id === 3 ? "Super Admin" : user.role_id === 1 ? "Job Seeker" : "Unknown"}
+                      {user.role_id === 3 ? "Super Admin" : user.role_id === 2 ? "Recruiter" : "Job Seeker"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={user.is_active ? "default" : "destructive"}>
-                        {user.is_active ? "Active" : "Inactive"}
+                      <Badge variant={!user.is_suspended ? "default" : "destructive"}>
+                        {!user.is_suspended ? "Active" : "Suspended"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <span className="text-sm text-muted-foreground cursor-pointer hover:underline">Edit</span>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => statusMutation.mutate({ id: user.id, is_suspended: user.is_suspended })}
+                        disabled={statusMutation.isPending}
+                      >
+                        {user.is_suspended ? "Activate" : "Suspend"}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))

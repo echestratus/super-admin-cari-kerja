@@ -1,5 +1,6 @@
-import { useQuery } from "@tanstack/react-query"
-
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { apiClient } from "@/lib/axios"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -15,20 +16,28 @@ interface Employer {
   id: string
   company_name: string
   email: string
-  status: string
+  is_verified: boolean
 }
 
 export default function EmployersPage() {
+  const queryClient = useQueryClient()
+
   const { data: employers = [], isLoading } = useQuery({
     queryKey: ["employers"],
     queryFn: async () => {
-      // return (await apiClient.get("/employers")).data
-      return [
-        { id: "1", company_name: "Tech Corp", email: "hr@techcorp.com", status: "VERIFIED" },
-        { id: "2", company_name: "Startup Inc", email: "founders@startup.io", status: "PENDING" },
-        { id: "3", company_name: "Scam Co", email: "admin@scam.com", status: "REJECTED" },
-      ] as Employer[]
+      const res = await apiClient.get("/admin/employers")
+      return res.data?.data || []
     },
+  })
+
+  const verifyMutation = useMutation({
+    mutationFn: async ({ id, is_verified }: { id: string, is_verified: boolean }) => {
+      const action = is_verified ? "unverify" : "verify"
+      await apiClient.put(`/admin/employers/${id}/verify`, { action })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employers"] })
+    }
   })
 
   return (
@@ -60,15 +69,22 @@ export default function EmployersPage() {
               ) : (
                 employers.map((emp) => (
                   <TableRow key={emp.id}>
-                    <TableCell className="font-medium">{emp.company_name}</TableCell>
+                    <TableCell className="font-medium">{emp.company_name || "N/A"}</TableCell>
                     <TableCell>{emp.email}</TableCell>
                     <TableCell>
-                      <Badge variant={emp.status === "VERIFIED" ? "default" : emp.status === "REJECTED" ? "destructive" : "secondary"}>
-                        {emp.status}
+                      <Badge variant={emp.is_verified ? "default" : "secondary"}>
+                        {emp.is_verified ? "Verified" : "Unverified"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <span className="text-sm text-muted-foreground cursor-pointer hover:underline">Review</span>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => verifyMutation.mutate({ id: emp.id, is_verified: emp.is_verified })}
+                        disabled={verifyMutation.isPending}
+                      >
+                        {emp.is_verified ? "Unverify" : "Verify"}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
