@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { User, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -86,6 +87,10 @@ export default function WorkersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workers"] })
       setEditingWorker(null)
+      toast.success("Worker profile updated successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update worker.")
     }
   })
 
@@ -96,6 +101,10 @@ export default function WorkersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workers"] })
       setDeletingWorker(null)
+      toast.success("Worker deleted successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to delete worker.")
     }
   })
 

@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { ShieldBan, CheckCircle2, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -87,9 +88,14 @@ export default function UsersPage() {
     mutationFn: async ({ id, is_suspended }: { id: string, is_suspended: boolean }) => {
       const action = is_suspended ? "activate" : "suspend"
       await apiClient.put(`/admin/users/${id}/status`, { action })
+      return action
     },
-    onSuccess: () => {
+    onSuccess: (action) => {
       queryClient.invalidateQueries({ queryKey: ["users"] })
+      toast.success(`User ${action === "activate" ? "activated" : "suspended"} successfully.`)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update user status.")
     }
   })
 
@@ -100,6 +106,10 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] })
       setEditingUser(null)
+      toast.success("User updated successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update user.")
     }
   })
 
@@ -110,6 +120,10 @@ export default function UsersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] })
       setDeletingUser(null)
+      toast.success("User deleted successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to delete user.")
     }
   })
 

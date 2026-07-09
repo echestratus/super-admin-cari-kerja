@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { Briefcase, CheckCircle2, XCircle, Archive, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -81,9 +82,14 @@ export default function JobsPage() {
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string, status: string }) => {
       await apiClient.put(`/admin/jobs/${id}/status`, { status })
+      return status
     },
-    onSuccess: () => {
+    onSuccess: (status) => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
+      toast.success(`Job marked as ${status} successfully.`)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update job status.")
     }
   })
 
@@ -94,6 +100,10 @@ export default function JobsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
       setEditingJob(null)
+      toast.success("Job updated successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to update job.")
     }
   })
 
@@ -104,6 +114,10 @@ export default function JobsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
       setDeletingJob(null)
+      toast.success("Job deleted successfully.")
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || "Failed to delete job.")
     }
   })
 
