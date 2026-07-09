@@ -32,7 +32,7 @@ import { Input } from "@/components/ui/input"
 interface Employer {
   id: string
   company_name: string
-  email: string
+  company_email: string
   is_verified: boolean
 }
 
@@ -57,7 +57,7 @@ export default function EmployersPage() {
   const [deletingEmployer, setDeletingEmployer] = useState<Employer | null>(null)
   const [formData, setFormData] = useState({
     company_name: "",
-    email: "",
+    company_email: "",
   })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
@@ -111,7 +111,7 @@ export default function EmployersPage() {
     setEditingEmployer(employer)
     setFormData({
       company_name: employer.company_name || "",
-      email: employer.email || "",
+      company_email: employer.company_email || "",
     })
   }
 
@@ -125,7 +125,7 @@ export default function EmployersPage() {
           </div>
           <div>
             <div className="font-medium text-foreground">{item.company_name || "Unknown Company"}</div>
-            <div className="text-sm text-muted-foreground">{item.email}</div>
+            <div className="text-sm text-muted-foreground">{item.company_email}</div>
           </div>
         </div>
       ),
@@ -230,12 +230,12 @@ export default function EmployersPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="company_email">Email</Label>
               <Input
-                id="email"
+                id="company_email"
                 type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                value={formData.company_email}
+                onChange={(e) => setFormData({ ...formData, company_email: e.target.value })}
               />
             </div>
           </div>
