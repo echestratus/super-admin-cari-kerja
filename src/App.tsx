@@ -6,6 +6,7 @@ import UsersPage from "./pages/UsersPage"
 import EmployersPage from "./pages/EmployersPage"
 import JobsPage from "./pages/JobsPage"
 import ApplicationsPage from "./pages/ApplicationsPage"
+import SettingsPage from "./pages/SettingsPage"
 import ProtectedRoute from "./components/ProtectedRoute"
 
 function App() {
@@ -21,7 +22,7 @@ function App() {
             <Route path="/employers" element={<EmployersPage />} />
             <Route path="/jobs" element={<JobsPage />} />
             <Route path="/applications" element={<ApplicationsPage />} />
-            <Route path="/settings" element={<div className="text-2xl font-bold">Settings</div>} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>
 
