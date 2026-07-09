@@ -11,10 +11,11 @@ import { useDebounce } from "@/hooks/use-debounce"
 
 interface Application {
   id: string
-  applicant_name: string
+  worker_name: string
   job_title: string
-  company: string
-  status: string
+  company_name?: string
+  status_name: string
+  created_at: string
 }
 
 interface PaginatedResponse {
@@ -56,9 +57,9 @@ export default function ApplicationsPage() {
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
-            {item.applicant_name ? item.applicant_name.charAt(0).toUpperCase() : "A"}
+            {item.worker_name ? item.worker_name.charAt(0).toUpperCase() : "A"}
           </div>
-          <div className="font-medium text-foreground">{item.applicant_name || "Unknown Applicant"}</div>
+          <div className="font-medium text-foreground">{item.worker_name || "Unknown Applicant"}</div>
         </div>
       ),
     },
@@ -67,7 +68,19 @@ export default function ApplicationsPage() {
       cell: (item) => (
         <div>
           <div className="font-medium text-foreground">{item.job_title || "Unknown Position"}</div>
-          <div className="text-sm text-muted-foreground">{item.company || "Unknown Company"}</div>
+          <div className="text-sm text-muted-foreground">{item.company_name || "Unknown Company"}</div>
+        </div>
+      )
+    },
+    {
+      header: "Applied Date",
+      cell: (item) => (
+        <div className="text-sm text-muted-foreground">
+          {item.created_at ? new Date(item.created_at).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          }) : "N/A"}
         </div>
       )
     },
@@ -77,12 +90,12 @@ export default function ApplicationsPage() {
         let variant: "default" | "destructive" | "secondary" | "outline" = "default"
         let className = ""
         
-        if (item.status === "ACCEPTED") {
+        if (item.status_name === "ACCEPTED") {
           className = "bg-success/10 text-success hover:bg-success/20 border-transparent"
-        } else if (item.status === "REJECTED") {
+        } else if (item.status_name === "REJECTED") {
           className = "bg-danger/10 text-danger hover:bg-danger/20 border-transparent"
           variant = "destructive"
-        } else if (item.status === "WITHDRAWN") {
+        } else if (item.status_name === "WITHDRAWN") {
           className = "bg-muted text-muted-foreground hover:bg-muted/80 border-transparent"
           variant = "secondary"
         } else {
@@ -92,7 +105,7 @@ export default function ApplicationsPage() {
 
         return (
           <Badge variant={variant} className={className}>
-            {item.status || "PENDING"}
+            {item.status_name || "PENDING"}
           </Badge>
         )
       },

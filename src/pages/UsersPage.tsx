@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 interface User {
   id: string
-  name: string
+  username: string
   email: string
   role_id: number
   is_suspended: boolean
@@ -61,7 +61,7 @@ export default function UsersPage() {
   const [deletingUser, setDeletingUser] = useState<User | null>(null)
 
   const [formData, setFormData] = useState({
-    name: "",
+    username: "",
     email: "",
     role_id: 1,
   })
@@ -116,7 +116,7 @@ export default function UsersPage() {
   const handleEditClick = (user: User) => {
     setEditingUser(user)
     setFormData({
-      name: user.name || "",
+      username: user.username || "",
       email: user.email || "",
       role_id: user.role_id || 1,
     })
@@ -128,10 +128,10 @@ export default function UsersPage() {
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
-            {item.name ? item.name.charAt(0).toUpperCase() : "U"}
+            {item.username ? item.username.charAt(0).toUpperCase() : "U"}
           </div>
           <div>
-            <div className="font-medium text-foreground">{item.name || "Unknown User"}</div>
+            <div className="font-medium text-foreground">{item.username || "Unknown User"}</div>
             <div className="text-sm text-muted-foreground">{item.email}</div>
           </div>
         </div>
@@ -236,11 +236,11 @@ export default function UsersPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                id="username"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               />
             </div>
             <div className="grid gap-2">

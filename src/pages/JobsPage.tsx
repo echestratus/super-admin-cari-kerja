@@ -33,7 +33,7 @@ interface Job {
   id: string
   title: string
   company_name: string
-  status: string
+  status_name: string
   created_at: string
 }
 
@@ -58,7 +58,7 @@ export default function JobsPage() {
   const [deletingJob, setDeletingJob] = useState<Job | null>(null)
   const [formData, setFormData] = useState({
     title: "",
-    status: "",
+    status_name: "",
   })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
@@ -111,7 +111,7 @@ export default function JobsPage() {
     setEditingJob(job)
     setFormData({
       title: job.title || "",
-      status: job.status || "",
+      status_name: job.status_name || "",
     })
   }
 
@@ -148,12 +148,12 @@ export default function JobsPage() {
         let variant: "default" | "destructive" | "secondary" | "outline" = "default"
         let className = ""
         
-        if (item.status === "APPROVED" || item.status === "ACTIVE") {
+        if (item.status_name === "APPROVED" || item.status_name === "ACTIVE") {
           className = "bg-success/10 text-success hover:bg-success/20 border-transparent"
-        } else if (item.status === "REJECTED") {
+        } else if (item.status_name === "REJECTED") {
           className = "bg-danger/10 text-danger hover:bg-danger/20 border-transparent"
           variant = "destructive"
-        } else if (item.status === "ARCHIVED") {
+        } else if (item.status_name === "ARCHIVED") {
           className = "bg-muted text-muted-foreground hover:bg-muted/80 border-transparent"
           variant = "secondary"
         } else {
@@ -163,7 +163,7 @@ export default function JobsPage() {
 
         return (
           <Badge variant={variant} className={className}>
-            {item.status}
+            {item.status_name}
           </Badge>
         )
       },
@@ -183,7 +183,7 @@ export default function JobsPage() {
             <Edit2 className="h-4 w-4" />
           </Button>
           
-          {item.status === "PENDING" && (
+          {item.status_name === "PENDING" && (
             <>
               <Button 
                 variant="ghost" 
@@ -207,7 +207,7 @@ export default function JobsPage() {
               </Button>
             </>
           )}
-          {(item.status === "APPROVED" || item.status === "ACTIVE") && (
+          {(item.status_name === "APPROVED" || item.status_name === "ACTIVE") && (
             <Button 
               variant="ghost" 
               size="sm"
@@ -285,11 +285,11 @@ export default function JobsPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="status">Status</Label>
+              <Label htmlFor="status_name">Status</Label>
               <Input
-                id="status"
-                value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                id="status_name"
+                value={formData.status_name}
+                onChange={(e) => setFormData({ ...formData, status_name: e.target.value })}
               />
             </div>
           </div>

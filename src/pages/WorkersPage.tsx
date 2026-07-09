@@ -31,7 +31,7 @@ import { Input } from "@/components/ui/input"
 
 interface Worker {
   id: string
-  name: string
+  username: string
   email: string
   gender?: string
   date_of_birth?: string
@@ -57,7 +57,7 @@ export default function WorkersPage() {
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null)
   const [deletingWorker, setDeletingWorker] = useState<Worker | null>(null)
   const [formData, setFormData] = useState({
-    name: "",
+    username: "",
     gender: "",
     date_of_birth: ""
   })
@@ -102,7 +102,7 @@ export default function WorkersPage() {
   const handleEditClick = (worker: Worker) => {
     setEditingWorker(worker)
     setFormData({
-      name: worker.name || "",
+      username: worker.username || "",
       gender: worker.gender || "",
       date_of_birth: worker.date_of_birth ? worker.date_of_birth.split("T")[0] : "",
     })
@@ -117,7 +117,7 @@ export default function WorkersPage() {
             <User className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground">{item.name || "Unknown Worker"}</div>
+            <div className="font-medium text-foreground">{item.username || "Unknown Worker"}</div>
             <div className="text-sm text-muted-foreground">{item.email}</div>
           </div>
         </div>
@@ -213,11 +213,11 @@ export default function WorkersPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="username">Full Name</Label>
               <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                id="username"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               />
             </div>
             <div className="grid gap-2">
