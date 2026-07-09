@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, Briefcase, Building2, FileText } from "lucide-react"
+import { Users, Briefcase, Building2, FileText, UserSquare2 } from "lucide-react"
 import {
   AreaChart,
   Area,
@@ -17,10 +17,11 @@ import { useQuery } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 
 interface DashboardStats {
-  total_users: number
-  total_recruiters: number
-  total_jobs: number
-  total_applications: number
+  users: number
+  recruiters: number
+  job_posts: number
+  job_applications: number
+  workers: number
 }
 
 interface GrowthData {
@@ -46,7 +47,7 @@ export default function DashboardPage() {
     queryKey: ["admin-stats"],
     queryFn: async () => {
       const res = await apiClient.get("/admin/stats")
-      return res.data?.data || { total_users: 0, total_recruiters: 0, total_jobs: 0, total_applications: 0 }
+      return res.data?.data || { users: 0, recruiters: 0, job_posts: 0, job_applications: 0, workers: 0 }
     }
   })
 
@@ -66,7 +67,7 @@ export default function DashboardPage() {
     }
   })
 
-  const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--warning))', 'hsl(var(--success))']
+  const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--warning))', 'hsl(var(--success))', 'hsl(var(--secondary))']
 
   const { data: recentActivities = [] } = useQuery<Activity[]>({
     queryKey: ["admin-activities"],
@@ -80,8 +81,8 @@ export default function DashboardPage() {
     return (
       <div className="p-8 space-y-6 animate-pulse">
         <div className="h-10 w-64 bg-muted rounded"></div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1,2,3,4].map(i => <div key={i} className="h-32 bg-muted rounded-xl"></div>)}
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          {[1,2,3,4,5].map(i => <div key={i} className="h-32 bg-muted rounded-xl"></div>)}
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
           <div className="col-span-4 h-[400px] bg-muted rounded-xl"></div>
@@ -98,7 +99,7 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Overview of system metrics and recent activities.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
         <Card className="hover:shadow-md transition-shadow border-l-4 border-l-primary">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -107,8 +108,8 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tight">{stats?.total_users || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1"><span className="text-success font-medium">+12%</span> from last month</p>
+            <div className="text-3xl font-bold tracking-tight">{stats?.users || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1"><span className="text-success font-medium">Platform</span> users</p>
           </CardContent>
         </Card>
         
@@ -120,21 +121,34 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tight">{stats?.total_recruiters || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1"><span className="text-success font-medium">+4%</span> from last month</p>
+            <div className="text-3xl font-bold tracking-tight">{stats?.recruiters || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1"><span className="text-success font-medium">Registered</span> companies</p>
           </CardContent>
         </Card>
         
+        <Card className="hover:shadow-md transition-shadow border-l-4 border-l-muted-foreground">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Job Seekers</CardTitle>
+            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
+              <UserSquare2 className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold tracking-tight">{stats?.workers || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1"><span className="text-success font-medium">Active</span> candidates</p>
+          </CardContent>
+        </Card>
+
         <Card className="hover:shadow-md transition-shadow border-l-4 border-l-accent">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
+            <CardTitle className="text-sm font-medium">Job Posts</CardTitle>
             <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center">
               <Briefcase className="h-4 w-4 text-accent" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tight">{stats?.total_jobs || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1"><span className="text-success font-medium">+24</span> new this week</p>
+            <div className="text-3xl font-bold tracking-tight">{stats?.job_posts || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1"><span className="text-success font-medium">Total</span> listings</p>
           </CardContent>
         </Card>
         
@@ -146,8 +160,8 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tight">{stats?.total_applications || 0}</div>
-            <p className="text-xs text-muted-foreground mt-1"><span className="text-success font-medium">+18%</span> conversion rate</p>
+            <div className="text-3xl font-bold tracking-tight">{stats?.job_applications || 0}</div>
+            <p className="text-xs text-muted-foreground mt-1"><span className="text-success font-medium">Submitted</span> applications</p>
           </CardContent>
         </Card>
       </div>
@@ -203,6 +217,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
+              {recentActivities.length === 0 && (
+                <div className="text-center text-muted-foreground py-8 text-sm">
+                  No recent activities found
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -215,25 +234,29 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="h-[250px] w-full flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={jobDistribution}
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {jobDistribution.map((_entry: JobDistribution, index: number) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px' }}
-                  />
-                  <Legend verticalAlign="bottom" height={36}/>
-                </PieChart>
-              </ResponsiveContainer>
+              {jobDistribution.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={jobDistribution}
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {jobDistribution.map((_entry: JobDistribution, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px' }}
+                    />
+                    <Legend verticalAlign="bottom" height={36}/>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-muted-foreground text-sm">No distribution data</div>
+              )}
             </div>
           </CardContent>
         </Card>
