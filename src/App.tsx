@@ -4,6 +4,8 @@ import DashboardPage from "./pages/DashboardPage"
 import LoginPage from "./pages/LoginPage"
 import UsersPage from "./pages/UsersPage"
 import EmployersPage from "./pages/EmployersPage"
+import JobsPage from "./pages/JobsPage"
+import ApplicationsPage from "./pages/ApplicationsPage"
 import ProtectedRoute from "./components/ProtectedRoute"
 
 function App() {
@@ -17,8 +19,8 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/employers" element={<EmployersPage />} />
-            <Route path="/jobs" element={<div className="text-2xl font-bold">Jobs</div>} />
-            <Route path="/applications" element={<div className="text-2xl font-bold">Applications</div>} />
+            <Route path="/jobs" element={<JobsPage />} />
+            <Route path="/applications" element={<ApplicationsPage />} />
             <Route path="/settings" element={<div className="text-2xl font-bold">Settings</div>} />
           </Route>
         </Route>
