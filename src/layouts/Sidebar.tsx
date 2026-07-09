@@ -5,13 +5,15 @@ import {
   Briefcase, 
   Building2, 
   Settings, 
-  FileText 
+  FileText,
+  UserSquare2 
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
   { icon: Users, label: "Users", href: "/users" },
+  { icon: UserSquare2, label: "Workers", href: "/workers" },
   { icon: Building2, label: "Employers", href: "/employers" },
   { icon: Briefcase, label: "Jobs", href: "/jobs" },
   { icon: FileText, label: "Applications", href: "/applications" },
