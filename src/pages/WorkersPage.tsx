@@ -1,13 +1,33 @@
 import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
-import { User, Eye } from "lucide-react"
+import { User, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 
 interface Worker {
   id: string
@@ -28,10 +48,19 @@ interface PaginatedResponse {
 }
 
 export default function WorkersPage() {
+  const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
   const pageSize = 10
+
+  const [editingWorker, setEditingWorker] = useState<Worker | null>(null)
+  const [deletingWorker, setDeletingWorker] = useState<Worker | null>(null)
+  const [formData, setFormData] = useState({
+    name: "",
+    gender: "",
+    date_of_birth: ""
+  })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
     queryKey: ["workers", page, pageSize, debouncedSearch],
@@ -49,6 +78,35 @@ export default function WorkersPage() {
 
   const workers = response?.data || []
   const totalWorkers = response?.meta?.totalData || 0
+
+  const saveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.put(`/admin/workers/${id}`, formData)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workers"] })
+      setEditingWorker(null)
+    }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.delete(`/admin/workers/${id}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workers"] })
+      setDeletingWorker(null)
+    }
+  })
+
+  const handleEditClick = (worker: Worker) => {
+    setEditingWorker(worker)
+    setFormData({
+      name: worker.name || "",
+      gender: worker.gender || "",
+      date_of_birth: worker.date_of_birth ? worker.date_of_birth.split("T")[0] : "",
+    })
+  }
 
   const columns: ColumnDef<Worker>[] = [
     {
@@ -88,14 +146,23 @@ export default function WorkersPage() {
     {
       header: "Actions",
       className: "text-right",
-      cell: () => (
-        <div className="flex justify-end gap-2">
+      cell: (item) => (
+        <div className="flex justify-end gap-1">
           <Button 
             variant="ghost" 
             size="sm"
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+            onClick={() => handleEditClick(item)}
           >
-            <Eye className="h-4 w-4 mr-2" /> View Profile
+            <Edit2 className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            className="text-muted-foreground hover:text-danger hover:bg-danger/10"
+            onClick={() => setDeletingWorker(item)}
+          >
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       ),
@@ -134,6 +201,78 @@ export default function WorkersPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Edit Worker Dialog */}
+      <Dialog open={!!editingWorker} onOpenChange={(open) => !open && setEditingWorker(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Worker Profile</DialogTitle>
+            <DialogDescription>
+              Update basic information for this job seeker.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="gender">Gender</Label>
+              <Input
+                id="gender"
+                value={formData.gender}
+                placeholder="e.g. male, female"
+                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dob">Date of Birth</Label>
+              <Input
+                id="dob"
+                type="date"
+                value={formData.date_of_birth}
+                onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingWorker(null)}>Cancel</Button>
+            <Button 
+              onClick={() => editingWorker && saveMutation.mutate(editingWorker.id)}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? "Saving..." : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Worker AlertDialog */}
+      <AlertDialog open={!!deletingWorker} onOpenChange={(open) => !open && setDeletingWorker(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the worker account
+              <strong className="mx-1 text-foreground">"{deletingWorker?.email}"</strong> 
+              and all of their associated data including applications.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => deletingWorker && deleteMutation.mutate(deletingWorker.id)}
+              className="bg-danger text-danger-foreground hover:bg-danger/90"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

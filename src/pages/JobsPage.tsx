@@ -6,8 +6,28 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
-import { Briefcase, CheckCircle2, XCircle, Archive, ExternalLink } from "lucide-react"
+import { Briefcase, CheckCircle2, XCircle, Archive, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 
 interface Job {
   id: string
@@ -34,6 +54,13 @@ export default function JobsPage() {
   const [page, setPage] = useState(1)
   const pageSize = 10
 
+  const [editingJob, setEditingJob] = useState<Job | null>(null)
+  const [deletingJob, setDeletingJob] = useState<Job | null>(null)
+  const [formData, setFormData] = useState({
+    title: "",
+    status: "",
+  })
+
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
     queryKey: ["jobs", page, pageSize, debouncedSearch],
     queryFn: async () => {
@@ -59,6 +86,34 @@ export default function JobsPage() {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
     }
   })
+
+  const saveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.put(`/admin/jobs/${id}`, formData)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] })
+      setEditingJob(null)
+    }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.delete(`/admin/jobs/${id}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] })
+      setDeletingJob(null)
+    }
+  })
+
+  const handleEditClick = (job: Job) => {
+    setEditingJob(job)
+    setFormData({
+      title: job.title || "",
+      status: job.status || "",
+    })
+  }
 
   const columns: ColumnDef<Job>[] = [
     {
@@ -117,14 +172,15 @@ export default function JobsPage() {
       header: "Actions",
       className: "text-right",
       cell: (item) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-1">
           <Button 
             variant="ghost" 
             size="sm"
-            className="text-muted-foreground hover:text-foreground"
-            title="View Details"
+            className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+            onClick={() => handleEditClick(item)}
+            title="Edit Title/Status"
           >
-            <ExternalLink className="h-4 w-4" />
+            <Edit2 className="h-4 w-4" />
           </Button>
           
           {item.status === "PENDING" && (
@@ -132,7 +188,7 @@ export default function JobsPage() {
               <Button 
                 variant="ghost" 
                 size="sm"
-                className="text-success hover:text-success hover:bg-success/10 px-2"
+                className="text-success hover:text-success hover:bg-success/10"
                 onClick={() => statusMutation.mutate({ id: item.id, status: "APPROVED" })}
                 disabled={statusMutation.isPending}
                 title="Approve"
@@ -142,7 +198,7 @@ export default function JobsPage() {
               <Button 
                 variant="ghost" 
                 size="sm"
-                className="text-danger hover:text-danger hover:bg-danger/10 px-2"
+                className="text-danger hover:text-danger hover:bg-danger/10"
                 onClick={() => statusMutation.mutate({ id: item.id, status: "REJECTED" })}
                 disabled={statusMutation.isPending}
                 title="Reject"
@@ -155,7 +211,7 @@ export default function JobsPage() {
             <Button 
               variant="ghost" 
               size="sm"
-              className="text-muted-foreground hover:text-foreground px-2"
+              className="text-muted-foreground hover:text-foreground"
               onClick={() => statusMutation.mutate({ id: item.id, status: "ARCHIVED" })}
               disabled={statusMutation.isPending}
               title="Archive"
@@ -163,6 +219,15 @@ export default function JobsPage() {
               <Archive className="h-4 w-4" />
             </Button>
           )}
+          <Button 
+            variant="ghost" 
+            size="sm"
+            className="text-muted-foreground hover:text-danger hover:bg-danger/10"
+            onClick={() => setDeletingJob(item)}
+            title="Delete Job"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
       ),
     }
@@ -200,6 +265,68 @@ export default function JobsPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Edit Job Dialog */}
+      <Dialog open={!!editingJob} onOpenChange={(open) => !open && setEditingJob(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Job Entry</DialogTitle>
+            <DialogDescription>
+              Update basic job title or forcefully change its status.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="title">Job Title</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="status">Status</Label>
+              <Input
+                id="status"
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingJob(null)}>Cancel</Button>
+            <Button 
+              onClick={() => editingJob && saveMutation.mutate(editingJob.id)}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? "Saving..." : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Job AlertDialog */}
+      <AlertDialog open={!!deletingJob} onOpenChange={(open) => !open && setDeletingJob(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the job posting
+              <strong className="mx-1 text-foreground">"{deletingJob?.title}"</strong> 
+              and all of its associated applications.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => deletingJob && deleteMutation.mutate(deletingJob.id)}
+              className="bg-danger text-danger-foreground hover:bg-danger/90"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

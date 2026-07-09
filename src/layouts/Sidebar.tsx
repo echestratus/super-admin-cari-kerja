@@ -2,11 +2,13 @@ import { NavLink } from "react-router-dom"
 import { 
   LayoutDashboard, 
   Users, 
-  Briefcase, 
+  Briefcase,
   Building2, 
   Settings, 
   FileText,
-  UserSquare2 
+  UserSquare2,
+  Database,
+  ClipboardList
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -17,6 +19,8 @@ export const navItems = [
   { icon: Building2, label: "Employers", href: "/employers" },
   { icon: Briefcase, label: "Jobs", href: "/jobs" },
   { icon: FileText, label: "Applications", href: "/applications" },
+  { icon: Database, label: "Lookups", href: "/lookups" },
+  { icon: ClipboardList, label: "Audit Logs", href: "/audit-logs" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ]
 

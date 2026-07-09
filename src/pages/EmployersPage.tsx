@@ -6,8 +6,28 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
-import { Building2, CheckCircle2, XCircle, Eye } from "lucide-react"
+import { Building2, CheckCircle2, XCircle, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 
 interface Employer {
   id: string
@@ -32,6 +52,13 @@ export default function EmployersPage() {
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
   const pageSize = 10
+
+  const [editingEmployer, setEditingEmployer] = useState<Employer | null>(null)
+  const [deletingEmployer, setDeletingEmployer] = useState<Employer | null>(null)
+  const [formData, setFormData] = useState({
+    company_name: "",
+    email: "",
+  })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
     queryKey: ["employers", page, pageSize, debouncedSearch],
@@ -59,6 +86,34 @@ export default function EmployersPage() {
       queryClient.invalidateQueries({ queryKey: ["employers"] })
     }
   })
+
+  const saveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.put(`/admin/employers/${id}`, formData)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employers"] })
+      setEditingEmployer(null)
+    }
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiClient.delete(`/admin/employers/${id}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employers"] })
+      setDeletingEmployer(null)
+    }
+  })
+
+  const handleEditClick = (employer: Employer) => {
+    setEditingEmployer(employer)
+    setFormData({
+      company_name: employer.company_name || "",
+      email: employer.email || "",
+    })
+  }
 
   const columns: ColumnDef<Employer>[] = [
     {
@@ -90,13 +145,14 @@ export default function EmployersPage() {
       header: "Actions",
       className: "text-right",
       cell: (item) => (
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-1">
           <Button 
             variant="ghost" 
             size="sm"
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-primary hover:bg-primary/10"
+            onClick={() => handleEditClick(item)}
           >
-            <Eye className="h-4 w-4" />
+            <Edit2 className="h-4 w-4" />
           </Button>
           <Button 
             variant="ghost" 
@@ -104,9 +160,18 @@ export default function EmployersPage() {
             className={item.is_verified ? "text-warning hover:text-warning hover:bg-warning/10" : "text-success hover:text-success hover:bg-success/10"}
             onClick={() => verifyMutation.mutate({ id: item.id, is_verified: item.is_verified })}
             disabled={verifyMutation.isPending}
+            title={item.is_verified ? "Unverify" : "Verify"}
           >
             {item.is_verified ? <XCircle className="h-4 w-4 mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
             {item.is_verified ? "Unverify" : "Verify"}
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            className="text-muted-foreground hover:text-danger hover:bg-danger/10"
+            onClick={() => setDeletingEmployer(item)}
+          >
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       ),
@@ -145,6 +210,69 @@ export default function EmployersPage() {
           />
         </CardContent>
       </Card>
+
+      {/* Edit Employer Dialog */}
+      <Dialog open={!!editingEmployer} onOpenChange={(open) => !open && setEditingEmployer(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Employer Profile</DialogTitle>
+            <DialogDescription>
+              Update basic information for this corporate account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="company_name">Company Name</Label>
+              <Input
+                id="company_name"
+                value={formData.company_name}
+                onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingEmployer(null)}>Cancel</Button>
+            <Button 
+              onClick={() => editingEmployer && saveMutation.mutate(editingEmployer.id)}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? "Saving..." : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Employer AlertDialog */}
+      <AlertDialog open={!!deletingEmployer} onOpenChange={(open) => !open && setDeletingEmployer(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the employer account
+              <strong className="mx-1 text-foreground">"{deletingEmployer?.company_name}"</strong> 
+              and all of their associated data including jobs.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => deletingEmployer && deleteMutation.mutate(deletingEmployer.id)}
+              className="bg-danger text-danger-foreground hover:bg-danger/90"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
