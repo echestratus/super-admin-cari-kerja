@@ -33,7 +33,7 @@ import { Input } from "@/components/ui/input"
 interface Employer {
   id: string
   company_name: string
-  company_email: string
+  email: string
   is_verified: boolean
 }
 
@@ -125,7 +125,7 @@ export default function EmployersPage() {
     setEditingEmployer(employer)
     setFormData({
       company_name: employer.company_name || "",
-      company_email: employer.company_email || "",
+      company_email: employer.email || "",
     })
   }
 
@@ -139,7 +139,7 @@ export default function EmployersPage() {
           </div>
           <div>
             <div className="font-medium text-foreground">{item.company_name || "Unknown Company"}</div>
-            <div className="text-sm text-muted-foreground">{item.company_email}</div>
+            <div className="text-sm text-muted-foreground">{item.email}</div>
           </div>
         </div>
       ),

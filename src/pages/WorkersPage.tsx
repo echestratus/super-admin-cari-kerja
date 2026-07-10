@@ -32,10 +32,10 @@ import { Input } from "@/components/ui/input"
 
 interface Worker {
   id: string
-  username: string
-  email: string
-  gender?: string
-  date_of_birth?: string
+  name: string
+  telephone: string
+  gender_id?: number
+  created_at?: string
 }
 
 interface PaginatedResponse {
@@ -111,9 +111,9 @@ export default function WorkersPage() {
   const handleEditClick = (worker: Worker) => {
     setEditingWorker(worker)
     setFormData({
-      username: worker.username || "",
-      gender: worker.gender || "",
-      date_of_birth: worker.date_of_birth ? worker.date_of_birth.split("T")[0] : "",
+      username: worker.name || "",
+      gender: worker.gender_id?.toString() || "",
+      date_of_birth: "",
     })
   }
 
@@ -126,8 +126,8 @@ export default function WorkersPage() {
             <User className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground">{item.username || "Unknown Worker"}</div>
-            <div className="text-sm text-muted-foreground">{item.email}</div>
+            <div className="font-medium text-foreground">{item.name || "Unknown Worker"}</div>
+            <div className="text-sm text-muted-foreground">{item.telephone}</div>
           </div>
         </div>
       ),
