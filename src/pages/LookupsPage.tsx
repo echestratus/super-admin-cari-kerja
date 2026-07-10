@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/alert-dialog"
 
 const LOOKUP_TABLES = [
-  { id: "categories", label: "Job Categories" },
+  { id: "job_tags", label: "Job Categories (Tags)" },
   { id: "industries", label: "Industries" },
   { id: "genders", label: "Genders" },
   { id: "nationalities", label: "Nationalities" },
