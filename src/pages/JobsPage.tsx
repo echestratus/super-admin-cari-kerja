@@ -35,7 +35,11 @@ interface Job {
   title: string
   company_name: string
   status_name: string
-  created_at: string
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string
+  salary?: number
+  description?: string
 }
 
 interface PaginatedResponse {
@@ -57,9 +61,12 @@ export default function JobsPage() {
 
   const [editingJob, setEditingJob] = useState<Job | null>(null)
   const [deletingJob, setDeletingJob] = useState<Job | null>(null)
+  const [hardDelete, setHardDelete] = useState(false)
   const [formData, setFormData] = useState({
     title: "",
     status_name: "",
+    salary: "",
+    description: "",
   })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
@@ -109,12 +116,13 @@ export default function JobsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiClient.delete(`/admin/jobs/${id}`)
+      return apiClient.delete(`/admin/jobs/${id}${hardDelete ? '?hard_delete=true' : ''}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
       setDeletingJob(null)
-      toast.success("Job deleted successfully.")
+      setHardDelete(false)
+      toast.success(`Job ${hardDelete ? 'hard deleted' : 'soft deleted'} successfully.`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to delete job.")
@@ -126,6 +134,8 @@ export default function JobsPage() {
     setFormData({
       title: job.title || "",
       status_name: job.status_name || "",
+      salary: job.salary?.toString() || "",
+      description: job.description || "",
     })
   }
 
@@ -138,21 +148,25 @@ export default function JobsPage() {
             <Briefcase className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground">{item.title || "Untitled Job"}</div>
+            <div className="font-medium text-foreground flex items-center gap-2">
+              {item.title || "Untitled Job"}
+              {item.deleted_at && (
+                <Badge variant="outline" className="border-danger text-danger bg-danger/5 text-[10px] h-4 px-1">
+                  Deleted
+                </Badge>
+              )}
+            </div>
             <div className="text-sm text-muted-foreground">{item.company_name || "Unknown Company"}</div>
           </div>
         </div>
       ),
     },
     {
-      header: "Posted Date",
+      header: "Timestamps",
       cell: (item) => (
-        <div className="text-sm text-muted-foreground">
-          {item.created_at ? new Date(item.created_at).toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-          }) : "N/A"}
+        <div className="text-xs text-muted-foreground flex flex-col gap-1">
+          <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
+          {item.updated_at && <div>Updated: {new Date(item.updated_at).toLocaleDateString()}</div>}
         </div>
       )
     },
@@ -306,6 +320,23 @@ export default function JobsPage() {
                 onChange={(e) => setFormData({ ...formData, status_name: e.target.value })}
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="salary">Salary</Label>
+              <Input
+                id="salary"
+                type="number"
+                value={formData.salary}
+                onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Description</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingJob(null)}>Cancel</Button>
@@ -325,10 +356,22 @@ export default function JobsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the job posting
-              <strong className="mx-1 text-foreground">"{deletingJob?.title}"</strong> 
-              and all of its associated applications.
+              You are about to delete the job posting <strong className="mx-1 text-foreground">"{deletingJob?.title}"</strong>.
+              <br/><br/>
+              By default, this is a soft-delete (the job will be disabled but data remains). Check the box below to permanently remove the record from the database.
             </AlertDialogDescription>
+            <div className="mt-4 pt-4 border-t flex items-center gap-2 text-sm text-danger">
+              <input 
+                type="checkbox" 
+                id="hardDeleteJob"
+                checked={hardDelete}
+                onChange={(e) => setHardDelete(e.target.checked)}
+                className="rounded border-danger text-danger focus:ring-danger"
+              />
+              <label htmlFor="hardDeleteJob" className="font-medium cursor-pointer">
+                Hard Delete (Permanently remove from database)
+              </label>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

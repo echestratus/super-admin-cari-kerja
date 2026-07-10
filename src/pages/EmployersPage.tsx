@@ -33,8 +33,15 @@ import { Input } from "@/components/ui/input"
 interface Employer {
   id: string
   company_name: string
-  company_email: string
+  email: string
   is_verified: boolean
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string
+  telephone?: string
+  industry_id?: number
+  description?: string
+  website?: string
 }
 
 interface PaginatedResponse {
@@ -56,9 +63,14 @@ export default function EmployersPage() {
 
   const [editingEmployer, setEditingEmployer] = useState<Employer | null>(null)
   const [deletingEmployer, setDeletingEmployer] = useState<Employer | null>(null)
+  const [hardDelete, setHardDelete] = useState(false)
   const [formData, setFormData] = useState({
     company_name: "",
     company_email: "",
+    telephone: "",
+    industry_id: "",
+    description: "",
+    website: ""
   })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
@@ -109,12 +121,13 @@ export default function EmployersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiClient.delete(`/admin/employers/${id}`)
+      return apiClient.delete(`/admin/employers/${id}${hardDelete ? '?hard_delete=true' : ''}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employers"] })
       setDeletingEmployer(null)
-      toast.success("Employer deleted successfully.")
+      setHardDelete(false)
+      toast.success(`Employer ${hardDelete ? 'hard deleted' : 'soft deleted'} successfully.`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to delete employer.")
@@ -125,7 +138,11 @@ export default function EmployersPage() {
     setEditingEmployer(employer)
     setFormData({
       company_name: employer.company_name || "",
-      company_email: employer.company_email || "",
+      company_email: employer.email || "",
+      telephone: employer.telephone || "",
+      industry_id: employer.industry_id?.toString() || "",
+      description: employer.description || "",
+      website: employer.website || ""
     })
   }
 
@@ -138,8 +155,15 @@ export default function EmployersPage() {
             <Building2 className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground">{item.company_name || "Unknown Company"}</div>
-            <div className="text-sm text-muted-foreground">{item.company_email}</div>
+            <div className="font-medium text-foreground flex items-center gap-2">
+              {item.company_name || "Unknown Company"}
+              {item.deleted_at && (
+                <Badge variant="outline" className="border-danger text-danger bg-danger/5 text-[10px] h-4 px-1">
+                  Deleted
+                </Badge>
+              )}
+            </div>
+            <div className="text-sm text-muted-foreground">{item.email}</div>
           </div>
         </div>
       ),
@@ -153,6 +177,15 @@ export default function EmployersPage() {
         >
           {item.is_verified ? "Verified" : "Pending Verification"}
         </Badge>
+      ),
+    },
+    {
+      header: "Timestamps",
+      cell: (item) => (
+        <div className="text-xs text-muted-foreground flex flex-col gap-1">
+          <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
+          {item.updated_at && <div>Updated: {new Date(item.updated_at).toLocaleDateString()}</div>}
+        </div>
       ),
     },
     {
@@ -252,6 +285,39 @@ export default function EmployersPage() {
                 onChange={(e) => setFormData({ ...formData, company_email: e.target.value })}
               />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="telephone">Telephone</Label>
+              <Input
+                id="telephone"
+                value={formData.telephone}
+                onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="industry_id">Industry ID</Label>
+              <Input
+                id="industry_id"
+                type="number"
+                value={formData.industry_id}
+                onChange={(e) => setFormData({ ...formData, industry_id: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="website">Website</Label>
+              <Input
+                id="website"
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Company Description</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingEmployer(null)}>Cancel</Button>
@@ -271,10 +337,22 @@ export default function EmployersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the employer account
-              <strong className="mx-1 text-foreground">"{deletingEmployer?.company_name}"</strong> 
-              and all of their associated data including jobs.
+              You are about to delete the employer account <strong className="mx-1 text-foreground">"{deletingEmployer?.company_name}"</strong>.
+              <br/><br/>
+              By default, this is a soft-delete (the employer profile will be disabled but data remains). Check the box below to permanently remove the record from the database.
             </AlertDialogDescription>
+            <div className="mt-4 pt-4 border-t flex items-center gap-2 text-sm text-danger">
+              <input 
+                type="checkbox" 
+                id="hardDeleteEmployer"
+                checked={hardDelete}
+                onChange={(e) => setHardDelete(e.target.checked)}
+                className="rounded border-danger text-danger focus:ring-danger"
+              />
+              <label htmlFor="hardDeleteEmployer" className="font-medium cursor-pointer">
+                Hard Delete (Permanently remove from database)
+              </label>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
