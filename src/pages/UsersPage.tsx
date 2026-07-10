@@ -105,7 +105,11 @@ export default function UsersPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiClient.put(`/admin/users/${id}`, formData)
+      const payload: any = { ...formData };
+      if (!payload.password) {
+        delete payload.password;
+      }
+      return apiClient.put(`/admin/users/${id}`, payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] })
