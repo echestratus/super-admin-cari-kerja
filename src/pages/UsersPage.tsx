@@ -38,6 +38,8 @@ interface User {
   role_id: number
   is_suspended: boolean
   created_at?: string
+  updated_at?: string
+  deleted_at?: string
 }
 
 interface PaginatedResponse {
@@ -60,11 +62,13 @@ export default function UsersPage() {
   // Modals state
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deletingUser, setDeletingUser] = useState<User | null>(null)
-
+  const [hardDelete, setHardDelete] = useState(false)
   const [formData, setFormData] = useState({
     username: "",
     email: "",
+    password: "",
     role_id: 1,
+    is_suspended: false,
   })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
@@ -115,12 +119,13 @@ export default function UsersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiClient.delete(`/admin/users/${id}`)
+      return apiClient.delete(`/admin/users/${id}${hardDelete ? '?hard_delete=true' : ''}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users"] })
       setDeletingUser(null)
-      toast.success("User deleted successfully.")
+      setHardDelete(false)
+      toast.success(`User ${hardDelete ? 'hard deleted' : 'soft deleted'} successfully.`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to delete user.")
@@ -132,7 +137,9 @@ export default function UsersPage() {
     setFormData({
       username: user.username || "",
       email: user.email || "",
+      password: "",
       role_id: user.role_id || 1,
+      is_suspended: user.is_suspended || false,
     })
   }
 
@@ -162,12 +169,28 @@ export default function UsersPage() {
     {
       header: "Status",
       cell: (item) => (
-        <Badge 
-          variant={!item.is_suspended ? "default" : "destructive"}
-          className={!item.is_suspended ? "bg-success/10 text-success hover:bg-success/20 border-transparent" : "bg-danger/10 text-danger hover:bg-danger/20 border-transparent"}
-        >
-          {!item.is_suspended ? "Active" : "Suspended"}
-        </Badge>
+        <div className="flex gap-2">
+          <Badge 
+            variant={!item.is_suspended ? "default" : "destructive"}
+            className={!item.is_suspended ? "bg-success/10 text-success hover:bg-success/20 border-transparent" : "bg-danger/10 text-danger hover:bg-danger/20 border-transparent"}
+          >
+            {!item.is_suspended ? "Active" : "Suspended"}
+          </Badge>
+          {item.deleted_at && (
+            <Badge variant="outline" className="border-danger text-danger bg-danger/5">
+              Deleted
+            </Badge>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: "Timestamps",
+      cell: (item) => (
+        <div className="text-xs text-muted-foreground flex flex-col gap-1">
+          <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
+          {item.updated_at && <div>Updated: {new Date(item.updated_at).toLocaleDateString()}</div>}
+        </div>
       ),
     },
     {
@@ -267,6 +290,16 @@ export default function UsersPage() {
               />
             </div>
             <div className="grid gap-2">
+              <Label htmlFor="password">Reset Password (leave blank to keep current)</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="New password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
               <Label htmlFor="role">Role</Label>
               <Select 
                 value={String(formData.role_id)} 
@@ -282,6 +315,17 @@ export default function UsersPage() {
                   <SelectItem value="3">Super Admin</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid gap-2 mt-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={formData.is_suspended}
+                  onChange={(e) => setFormData({ ...formData, is_suspended: e.target.checked })}
+                  className="rounded border-input text-primary focus:ring-primary"
+                />
+                Suspend User Account
+              </label>
             </div>
           </div>
           <DialogFooter>
@@ -302,10 +346,22 @@ export default function UsersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the user account
-              <strong className="mx-1 text-foreground">"{deletingUser?.email}"</strong> 
-              and all of their associated data.
+              You are about to delete the user account <strong className="mx-1 text-foreground">"{deletingUser?.email}"</strong>.
+              <br/><br/>
+              By default, this is a soft-delete (the user will be disabled but data remains). Check the box below to permanently remove the record from the database.
             </AlertDialogDescription>
+            <div className="mt-4 pt-4 border-t flex items-center gap-2 text-sm text-danger">
+              <input 
+                type="checkbox" 
+                id="hardDeleteCheckbox"
+                checked={hardDelete}
+                onChange={(e) => setHardDelete(e.target.checked)}
+                className="rounded border-danger text-danger focus:ring-danger"
+              />
+              <label htmlFor="hardDeleteCheckbox" className="font-medium cursor-pointer">
+                Hard Delete (Permanently remove from database)
+              </label>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

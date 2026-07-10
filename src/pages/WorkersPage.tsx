@@ -36,6 +36,11 @@ interface Worker {
   telephone: string
   gender_id?: number
   created_at?: string
+  updated_at?: string
+  deleted_at?: string
+  date_of_birth?: string
+  profile_summary?: string
+  address?: string
 }
 
 interface PaginatedResponse {
@@ -57,10 +62,14 @@ export default function WorkersPage() {
 
   const [editingWorker, setEditingWorker] = useState<Worker | null>(null)
   const [deletingWorker, setDeletingWorker] = useState<Worker | null>(null)
+  const [hardDelete, setHardDelete] = useState(false)
   const [formData, setFormData] = useState({
-    username: "",
-    gender: "",
-    date_of_birth: ""
+    name: "",
+    telephone: "",
+    gender_id: "",
+    date_of_birth: "",
+    profile_summary: "",
+    address: ""
   })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
@@ -96,12 +105,13 @@ export default function WorkersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiClient.delete(`/admin/workers/${id}`)
+      return apiClient.delete(`/admin/workers/${id}${hardDelete ? '?hard_delete=true' : ''}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workers"] })
       setDeletingWorker(null)
-      toast.success("Worker deleted successfully.")
+      setHardDelete(false)
+      toast.success(`Worker ${hardDelete ? 'hard deleted' : 'soft deleted'} successfully.`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to delete worker.")
@@ -111,9 +121,12 @@ export default function WorkersPage() {
   const handleEditClick = (worker: Worker) => {
     setEditingWorker(worker)
     setFormData({
-      username: worker.name || "",
-      gender: worker.gender_id?.toString() || "",
-      date_of_birth: "",
+      name: worker.name || "",
+      telephone: worker.telephone || "",
+      gender_id: worker.gender_id?.toString() || "",
+      date_of_birth: worker.date_of_birth ? new Date(worker.date_of_birth).toISOString().split("T")[0] : "",
+      profile_summary: worker.profile_summary || "",
+      address: worker.address || ""
     })
   }
 
@@ -126,7 +139,14 @@ export default function WorkersPage() {
             <User className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground">{item.name || "Unknown Worker"}</div>
+            <div className="font-medium text-foreground flex items-center gap-2">
+              {item.name || "Unknown Worker"}
+              {item.deleted_at && (
+                <Badge variant="outline" className="border-danger text-danger bg-danger/5 text-[10px] h-4 px-1">
+                  Deleted
+                </Badge>
+              )}
+            </div>
             <div className="text-sm text-muted-foreground">{item.telephone}</div>
           </div>
         </div>
@@ -136,7 +156,7 @@ export default function WorkersPage() {
       header: "Gender",
       cell: (item) => (
         <Badge variant="outline" className="bg-background capitalize">
-          {item.gender || "Not Specified"}
+          {item.gender_id === 1 ? "Male" : item.gender_id === 2 ? "Female" : "Not Specified"}
         </Badge>
       ),
     },
@@ -151,6 +171,15 @@ export default function WorkersPage() {
         }
         return <span className="text-sm">{age}</span>
       },
+    },
+    {
+      header: "Timestamps",
+      cell: (item) => (
+        <div className="text-xs text-muted-foreground flex flex-col gap-1">
+          <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
+          {item.updated_at && <div>Updated: {new Date(item.updated_at).toLocaleDateString()}</div>}
+        </div>
+      ),
     },
     {
       header: "Actions",
@@ -222,20 +251,29 @@ export default function WorkersPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="username">Full Name</Label>
+              <Label htmlFor="name">Full Name</Label>
               <Input
-                id="username"
-                value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="gender">Gender</Label>
+              <Label htmlFor="telephone">Telephone</Label>
+              <Input
+                id="telephone"
+                value={formData.telephone}
+                onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="gender">Gender ID</Label>
               <Input
                 id="gender"
-                value={formData.gender}
-                placeholder="e.g. male, female"
-                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                type="number"
+                value={formData.gender_id}
+                placeholder="1 = Male, 2 = Female"
+                onChange={(e) => setFormData({ ...formData, gender_id: e.target.value })}
               />
             </div>
             <div className="grid gap-2">
@@ -245,6 +283,22 @@ export default function WorkersPage() {
                 type="date"
                 value={formData.date_of_birth}
                 onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="address">Address</Label>
+              <Input
+                id="address"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="profile_summary">Profile Summary</Label>
+              <Input
+                id="profile_summary"
+                value={formData.profile_summary}
+                onChange={(e) => setFormData({ ...formData, profile_summary: e.target.value })}
               />
             </div>
           </div>
@@ -266,10 +320,22 @@ export default function WorkersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the worker account
-              <strong className="mx-1 text-foreground">"{deletingWorker?.email}"</strong> 
-              and all of their associated data including applications.
+              You are about to delete the worker account <strong className="mx-1 text-foreground">"{deletingWorker?.name}"</strong>.
+              <br/><br/>
+              By default, this is a soft-delete (the worker profile will be disabled but data remains). Check the box below to permanently remove the record from the database.
             </AlertDialogDescription>
+            <div className="mt-4 pt-4 border-t flex items-center gap-2 text-sm text-danger">
+              <input 
+                type="checkbox" 
+                id="hardDeleteWorker"
+                checked={hardDelete}
+                onChange={(e) => setHardDelete(e.target.checked)}
+                className="rounded border-danger text-danger focus:ring-danger"
+              />
+              <label htmlFor="hardDeleteWorker" className="font-medium cursor-pointer">
+                Hard Delete (Permanently remove from database)
+              </label>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
