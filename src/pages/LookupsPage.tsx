@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/alert-dialog"
 
 const LOOKUP_TABLES = [
-  { id: "categories", label: "Job Categories" },
+  { id: "job_tags", label: "Job Categories (Tags)" },
   { id: "industries", label: "Industries" },
   { id: "genders", label: "Genders" },
   { id: "nationalities", label: "Nationalities" },
@@ -88,10 +88,16 @@ export default function LookupsPage() {
     }
   })
 
+  const getDisplayName = (item: any) => {
+    if (!item) return "";
+    return item.name || item.country_name || item.skill_name || item.gender_name || 
+           item.type_name || item.level_name || item.status_name || item.religion_name || "N/A";
+  }
+
   const handleOpenForm = (item?: any) => {
     if (item) {
       setEditingItem(item)
-      setFormData({ name: item.name || "" })
+      setFormData({ name: getDisplayName(item) })
     } else {
       setEditingItem(null)
       setFormData({ name: "" })
@@ -112,7 +118,7 @@ export default function LookupsPage() {
     },
     {
       header: "Name / Value",
-      accessorKey: "name",
+      cell: (item) => getDisplayName(item),
     },
     {
       header: "Actions",
