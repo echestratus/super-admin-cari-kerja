@@ -42,6 +42,8 @@ interface Employer {
   industry_id?: number
   description?: string
   website?: string
+  user_email?: string
+  user_username?: string
 }
 
 interface PaginatedResponse {
@@ -167,6 +169,19 @@ export default function EmployersPage() {
           </div>
         </div>
       ),
+    },
+    {
+      header: "Account Info",
+      cell: (item) => (
+        <div>
+          {item.user_email ? (
+            <div className="font-medium text-foreground">{item.user_email}</div>
+          ) : (
+            <div className="text-muted-foreground italic">N/A</div>
+          )}
+          {item.user_username && <div className="text-sm text-muted-foreground">@{item.user_username}</div>}
+        </div>
+      )
     },
     {
       header: "Status",

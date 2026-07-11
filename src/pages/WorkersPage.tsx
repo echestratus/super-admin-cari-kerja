@@ -41,6 +41,8 @@ interface Worker {
   date_of_birth?: string
   profile_summary?: string
   address?: string
+  user_email?: string
+  user_username?: string
 }
 
 interface PaginatedResponse {
@@ -151,6 +153,19 @@ export default function WorkersPage() {
           </div>
         </div>
       ),
+    },
+    {
+      header: "Account Info",
+      cell: (item) => (
+        <div>
+          {item.user_email ? (
+            <div className="font-medium text-foreground">{item.user_email}</div>
+          ) : (
+            <div className="text-muted-foreground italic">N/A</div>
+          )}
+          {item.user_username && <div className="text-sm text-muted-foreground">@{item.user_username}</div>}
+        </div>
+      )
     },
     {
       header: "Gender",
