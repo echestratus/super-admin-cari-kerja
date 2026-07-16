@@ -8,7 +8,10 @@ import {
   FileText,
   UserSquare2,
   Database,
-  ClipboardList
+  ClipboardList,
+  MapPin,
+  CreditCard,
+  Receipt
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -19,7 +22,10 @@ export const navItems = [
   { icon: Building2, label: "Employers", href: "/employers" },
   { icon: Briefcase, label: "Jobs", href: "/jobs" },
   { icon: FileText, label: "Applications", href: "/applications" },
+  { icon: CreditCard, label: "Plans", href: "/plans" },
+  { icon: Receipt, label: "Payments", href: "/payment-orders" },
   { icon: Database, label: "Lookups", href: "/lookups" },
+  { icon: MapPin, label: "Locations", href: "/locations" },
   { icon: ClipboardList, label: "Audit Logs", href: "/audit-logs" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ]

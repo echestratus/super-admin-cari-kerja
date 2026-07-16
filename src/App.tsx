@@ -5,8 +5,13 @@ import DashboardPage from "./pages/DashboardPage"
 import LoginPage from "./pages/LoginPage"
 import UsersPage from "./pages/UsersPage"
 import WorkersPage from "./pages/WorkersPage"
+import WorkerDetailPage from "./pages/WorkerDetailPage"
 import EmployersPage from "./pages/EmployersPage"
+import EmployerDetailPage from "./pages/EmployerDetailPage"
 import LookupsPage from "./pages/LookupsPage"
+import LocationsPage from "./pages/LocationsPage"
+import PlansPage from "./pages/PlansPage"
+import PaymentOrdersPage from "./pages/PaymentOrdersPage"
 import AuditLogsPage from "./pages/AuditLogsPage"
 import JobsPage from "./pages/JobsPage"
 import ApplicationsPage from "./pages/ApplicationsPage"
@@ -25,10 +30,15 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="workers" element={<WorkersPage />} />
+            <Route path="workers/:id" element={<WorkerDetailPage />} />
             <Route path="employers" element={<EmployersPage />} />
+            <Route path="employers/:id" element={<EmployerDetailPage />} />
             <Route path="jobs" element={<JobsPage />} />
             <Route path="applications" element={<ApplicationsPage />} />
             <Route path="lookups" element={<LookupsPage />} />
+            <Route path="locations" element={<LocationsPage />} />
+            <Route path="plans" element={<PlansPage />} />
+            <Route path="payment-orders" element={<PaymentOrdersPage />} />
             <Route path="audit-logs" element={<AuditLogsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
