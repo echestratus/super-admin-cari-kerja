@@ -76,7 +76,7 @@ export default function PlansPage() {
   const { data: plansData, isLoading } = useQuery<Record<PlanType, Plan[]>>({
     queryKey: ["plans"],
     queryFn: async () => {
-      const res = await apiClient.get("/payments/plans")
+      const res = await apiClient.get("/admin/plans")
       return res.data?.data || { subscription: [], single_post: [], boost: [] }
     },
   })
@@ -105,7 +105,7 @@ export default function PlansPage() {
       toast.success("Plan saved successfully.")
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to save plan. The backend admin endpoint may not be available yet.")
+      toast.error(error.response?.data?.message || "Failed to save plan.")
     },
   })
 
@@ -119,7 +119,12 @@ export default function PlansPage() {
       toast.success("Plan deleted successfully.")
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to delete plan. The backend admin endpoint may not be available yet.")
+      if (error.response?.status === 409) {
+        toast.error("This plan has existing purchases and cannot be deleted. Deactivate it instead by unchecking \"Active\" in the edit form.")
+      } else {
+        toast.error(error.response?.data?.message || "Failed to delete plan.")
+      }
+      setDeletingPlan(null)
     },
   })
 
