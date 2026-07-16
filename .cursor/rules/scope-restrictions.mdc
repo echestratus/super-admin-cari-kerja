@@ -1,0 +1,34 @@
+---
+description: Batasan ruang lingkup — hanya Super Admin, frontend/backend read-only
+alwaysApply: true
+---
+
+# Pembagian Tugas Backend & Frontend
+
+## Ruang lingkup kerja
+
+- **Hanya ubah kode di repo ini**: `super-admin-cari-kerja`
+- **Read-only** (boleh baca, dilarang tulis/hapus; path relatif dari root workspace):
+  - `../cari-kerja-frontend`
+  - `../cari-kerja-backend`
+
+## Jika butuh perubahan di frontend/backend
+
+Jangan modifikasi repo tersebut. Sebaliknya, berikan blok **Instruksi untuk Agen Frontend dan Backend** yang spesifik dan bisa disalin user, mencakup:
+
+- Endpoint/API yang dibutuhkan (method, path, payload, response)
+- Komponen/halaman yang perlu diubah
+- Perilaku UI yang diharapkan
+- Edge case dan validasi
+
+Contoh format output:
+
+```
+## Instruksi untuk Agen Frontend dan Backend
+
+### Backend
+- Tambah endpoint `GET /api/...` dengan response `{ ... }`
+
+### Frontend
+- Di halaman X, tampilkan kolom Y dari response tersebut
+```

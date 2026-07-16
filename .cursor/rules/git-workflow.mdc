@@ -1,0 +1,27 @@
+---
+description: Git workflow untuk Super Admin Cari Kerja — branch, commit, dan push
+alwaysApply: true
+---
+
+# Git Workflow
+
+Sebelum menulis atau mengubah kode:
+
+1. **Buat branch baru** dari `develop` dengan format: `feature/nama-fitur`, `fix/nama-perbaikan`, atau `chore/nama-task`.
+2. **Commit granular** — satu commit per perubahan fungsional yang selesai, bukan satu commit besar di akhir.
+3. **Conventional Commits** untuk pesan commit:
+   - `feat:` fitur baru
+   - `fix:` perbaikan bug
+   - `docs:` dokumentasi
+   - `style:` formatting tanpa ubah logika
+   - `refactor:` perubahan kode tanpa fitur/bug fix
+   - `chore:` build, tooling, dll.
+4. **Jangan push ke `develop`** — push hanya ke branch fitur. Beri instruksi merge/review ke user, atau buat PR jika diminta.
+
+Contoh alur:
+```
+git checkout develop && git pull
+git checkout -b feature/nama-fitur
+# ... kerja & commit granular ...
+git push -u origin feature/nama-fitur
+```
