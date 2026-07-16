@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -10,14 +11,6 @@ import { Building2, CheckCircle2, XCircle, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { toast } from "sonner"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -27,8 +20,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 
 interface Employer {
   id: string
@@ -58,22 +49,14 @@ interface PaginatedResponse {
 
 export default function EmployersPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
   const pageSize = 10
 
-  const [editingEmployer, setEditingEmployer] = useState<Employer | null>(null)
   const [deletingEmployer, setDeletingEmployer] = useState<Employer | null>(null)
   const [hardDelete, setHardDelete] = useState(false)
-  const [formData, setFormData] = useState({
-    company_name: "",
-    company_email: "",
-    telephone: "",
-    industry_id: "",
-    description: "",
-    website: ""
-  })
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
     queryKey: ["employers", page, pageSize, debouncedSearch],
@@ -107,20 +90,6 @@ export default function EmployersPage() {
     }
   })
 
-  const saveMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return apiClient.put(`/admin/employers/${id}`, formData)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["employers"] })
-      setEditingEmployer(null)
-      toast.success("Employer updated successfully.")
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to update employer.")
-    }
-  })
-
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       return apiClient.delete(`/admin/employers/${id}${hardDelete ? '?hard_delete=true' : ''}`)
@@ -135,18 +104,6 @@ export default function EmployersPage() {
       toast.error(error.response?.data?.message || "Failed to delete employer.")
     }
   })
-
-  const handleEditClick = (employer: Employer) => {
-    setEditingEmployer(employer)
-    setFormData({
-      company_name: employer.company_name || "",
-      company_email: employer.email || "",
-      telephone: employer.telephone || "",
-      industry_id: employer.industry_id?.toString() || "",
-      description: employer.description || "",
-      website: employer.website || ""
-    })
-  }
 
   const columns: ColumnDef<Employer>[] = [
     {
@@ -212,7 +169,8 @@ export default function EmployersPage() {
             variant="ghost" 
             size="sm"
             className="text-muted-foreground hover:text-primary hover:bg-primary/10"
-            onClick={() => handleEditClick(item)}
+            onClick={() => navigate(`/employers/${item.id}`)}
+            title="Edit full profile"
           >
             <Edit2 className="h-4 w-4" />
           </Button>
@@ -272,79 +230,6 @@ export default function EmployersPage() {
           />
         </CardContent>
       </Card>
-
-      {/* Edit Employer Dialog */}
-      <Dialog open={!!editingEmployer} onOpenChange={(open) => !open && setEditingEmployer(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Employer Profile</DialogTitle>
-            <DialogDescription>
-              Update basic information for this corporate account.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="company_name">Company Name</Label>
-              <Input
-                id="company_name"
-                value={formData.company_name}
-                onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="company_email">Email</Label>
-              <Input
-                id="company_email"
-                type="email"
-                value={formData.company_email}
-                onChange={(e) => setFormData({ ...formData, company_email: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="telephone">Telephone</Label>
-              <Input
-                id="telephone"
-                value={formData.telephone}
-                onChange={(e) => setFormData({ ...formData, telephone: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="industry_id">Industry ID</Label>
-              <Input
-                id="industry_id"
-                type="number"
-                value={formData.industry_id}
-                onChange={(e) => setFormData({ ...formData, industry_id: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="website">Website</Label>
-              <Input
-                id="website"
-                value={formData.website}
-                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="description">Company Description</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingEmployer(null)}>Cancel</Button>
-            <Button 
-              onClick={() => editingEmployer && saveMutation.mutate(editingEmployer.id)}
-              disabled={saveMutation.isPending}
-            >
-              {saveMutation.isPending ? "Saving..." : "Save changes"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Employer AlertDialog */}
       <AlertDialog open={!!deletingEmployer} onOpenChange={(open) => !open && setDeletingEmployer(null)}>

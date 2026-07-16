@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Edit2, Trash2 } from "lucide-react"
+import { Plus, Edit2, Trash2, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -29,15 +29,50 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-const LOOKUP_TABLES = [
-  { id: "job_tags", label: "Job Categories (Tags)" },
-  { id: "industries", label: "Industries" },
-  { id: "genders", label: "Genders" },
-  { id: "nationalities", label: "Nationalities" },
-  { id: "employment_types", label: "Employment Types" },
-  { id: "experience_levels", label: "Experience Levels" },
-  { id: "skills", label: "Skills" },
+interface LookupTable {
+  id: string
+  label: string
+  /** Requires backend to extend the /admin/lookups whitelist before it works. */
+  pendingBackend?: boolean
+}
+
+const LOOKUP_GROUPS: { group: string; tables: LookupTable[] }[] = [
+  {
+    group: "Worker Profile",
+    tables: [
+      { id: "genders", label: "Genders" },
+      { id: "nationalities", label: "Nationalities" },
+      { id: "religions", label: "Religions" },
+      { id: "marriage_statuses", label: "Marriage Statuses" },
+      { id: "proficiency_levels", label: "Language Proficiency Levels" },
+      { id: "languages", label: "Languages (Master)", pendingBackend: true },
+    ],
+  },
+  {
+    group: "Jobs & Applications",
+    tables: [
+      { id: "job_tags", label: "Job Categories (Tags)" },
+      { id: "categories", label: "Categories", pendingBackend: true },
+      { id: "industries", label: "Industries" },
+      { id: "employment_types", label: "Employment Types" },
+      { id: "experience_levels", label: "Experience Levels" },
+      { id: "skills", label: "Skills" },
+      { id: "salary_types", label: "Salary Types" },
+      { id: "job_post_statuses", label: "Job Post Statuses" },
+      { id: "application_statuses", label: "Application Statuses" },
+      { id: "question_types", label: "Question Types" },
+    ],
+  },
+  {
+    group: "System",
+    tables: [
+      { id: "roles", label: "Roles", pendingBackend: true },
+      { id: "currencies", label: "Currencies", pendingBackend: true },
+    ],
+  },
 ]
+
+const LOOKUP_TABLES = LOOKUP_GROUPS.flatMap((g) => g.tables)
 
 export default function LookupsPage() {
   const queryClient = useQueryClient()
@@ -91,7 +126,8 @@ export default function LookupsPage() {
   const getDisplayName = (item: any) => {
     if (!item) return "";
     return item.name || item.country_name || item.skill_name || item.gender_name || 
-           item.type_name || item.level_name || item.status_name || item.religion_name || "N/A";
+           item.type_name || item.level_name || item.status_name || item.religion_name ||
+           item.language_name || item.display_name || item.code || "N/A";
   }
 
   const handleOpenForm = (item?: any) => {
@@ -161,8 +197,13 @@ export default function LookupsPage() {
               <SelectValue placeholder="Select table" />
             </SelectTrigger>
             <SelectContent>
-              {LOOKUP_TABLES.map(t => (
-                <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+              {LOOKUP_GROUPS.map((group) => (
+                <SelectGroup key={group.group}>
+                  <SelectLabel>{group.group}</SelectLabel>
+                  {group.tables.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>
@@ -171,6 +212,16 @@ export default function LookupsPage() {
           <Plus className="h-4 w-4" /> Add New
         </Button>
       </div>
+
+      {LOOKUP_TABLES.find(t => t.id === activeTable)?.pendingBackend && (
+        <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <p>
+            This table is not yet supported by the backend admin API. The page is ready, but
+            create/update/delete will fail until the backend whitelists this table.
+          </p>
+        </div>
+      )}
 
       <Card className="border-none shadow-sm">
         <CardHeader className="px-0 pt-0">
