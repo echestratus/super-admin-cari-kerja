@@ -54,6 +54,8 @@ interface ResourceSectionProps {
   fields: FieldDef[]
   /** Human label for the delete confirmation, derived from the item. */
   getItemLabel: (item: any) => string
+  /** Identifier used in PUT/DELETE URLs. Defaults to item.id. */
+  getItemId?: (item: any) => string
   canCreate?: boolean
   canEdit?: boolean
   canDelete?: boolean
@@ -77,6 +79,7 @@ export function ResourceSection({
   columns,
   fields,
   getItemLabel,
+  getItemId = (item) => item.id,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -102,7 +105,7 @@ export function ResourceSection({
     mutationFn: async () => {
       const payload = toPayload ? toPayload(formValues) : buildPayload(formValues, fields)
       if (editingItem) {
-        return apiClient.put(`${baseUrl}/${editingItem.id}`, payload)
+        return apiClient.put(`${baseUrl}/${getItemId(editingItem)}`, payload)
       }
       return apiClient.post(baseUrl, payload)
     },
@@ -112,7 +115,7 @@ export function ResourceSection({
       toast.success(`${title} saved successfully.`)
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || `Failed to save. The backend admin endpoint may not be available yet.`)
+      toast.error(err.response?.data?.message || "Failed to save record.")
     },
   })
 
@@ -126,7 +129,7 @@ export function ResourceSection({
       toast.success(`${title} record deleted successfully.`)
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || `Failed to delete. The backend admin endpoint may not be available yet.`)
+      toast.error(err.response?.data?.message || "Failed to delete record.")
     },
   })
 
@@ -287,7 +290,7 @@ export function ResourceSection({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deletingItem && deleteMutation.mutate(deletingItem.id)}
+              onClick={() => deletingItem && deleteMutation.mutate(getItemId(deletingItem))}
               className="bg-danger text-danger-foreground hover:bg-danger/90"
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}

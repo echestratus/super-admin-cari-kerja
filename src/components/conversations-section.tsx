@@ -93,7 +93,7 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
       toast.success("Message deleted successfully.")
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || "Failed to delete message. The backend admin endpoint may not be available yet.")
+      toast.error(err.response?.data?.message || "Failed to delete message.")
     },
   })
 

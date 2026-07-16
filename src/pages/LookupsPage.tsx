@@ -8,7 +8,7 @@ import type { ColumnDef } from "@/components/ui/data-table"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Edit2, Trash2, AlertTriangle } from "lucide-react"
+import { Plus, Edit2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -32,8 +32,6 @@ import {
 interface LookupTable {
   id: string
   label: string
-  /** Requires backend to extend the /admin/lookups whitelist before it works. */
-  pendingBackend?: boolean
 }
 
 const LOOKUP_GROUPS: { group: string; tables: LookupTable[] }[] = [
@@ -45,14 +43,14 @@ const LOOKUP_GROUPS: { group: string; tables: LookupTable[] }[] = [
       { id: "religions", label: "Religions" },
       { id: "marriage_statuses", label: "Marriage Statuses" },
       { id: "proficiency_levels", label: "Language Proficiency Levels" },
-      { id: "languages", label: "Languages (Master)", pendingBackend: true },
+      { id: "languages", label: "Languages (Master)" },
     ],
   },
   {
     group: "Jobs & Applications",
     tables: [
       { id: "job_tags", label: "Job Categories (Tags)" },
-      { id: "categories", label: "Categories", pendingBackend: true },
+      { id: "categories", label: "Categories" },
       { id: "industries", label: "Industries" },
       { id: "employment_types", label: "Employment Types" },
       { id: "experience_levels", label: "Experience Levels" },
@@ -66,8 +64,8 @@ const LOOKUP_GROUPS: { group: string; tables: LookupTable[] }[] = [
   {
     group: "System",
     tables: [
-      { id: "roles", label: "Roles", pendingBackend: true },
-      { id: "currencies", label: "Currencies", pendingBackend: true },
+      { id: "roles", label: "Roles" },
+      { id: "currencies", label: "Currencies" },
     ],
   },
 ]
@@ -82,7 +80,7 @@ export default function LookupsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<any>(null)
-  const [formData, setFormData] = useState({ name: "" })
+  const [formData, setFormData] = useState({ name: "", iso_alpha2: "", iso_alpha3: "" })
 
   const { data: records = [], isLoading } = useQuery({
     queryKey: ["lookups", activeTable],
@@ -94,10 +92,15 @@ export default function LookupsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: { id?: string; name: string }) => {
-      if (data.id) {
-        return apiClient.put(`/admin/lookups/${activeTable}/${data.id}`, { name: data.name })
+      const payload: Record<string, string> = { name: data.name }
+      if (activeTable === "nationalities") {
+        if (formData.iso_alpha2.trim()) payload.iso_alpha2 = formData.iso_alpha2.trim().toUpperCase()
+        if (formData.iso_alpha3.trim()) payload.iso_alpha3 = formData.iso_alpha3.trim().toUpperCase()
       }
-      return apiClient.post(`/admin/lookups/${activeTable}`, { name: data.name })
+      if (data.id) {
+        return apiClient.put(`/admin/lookups/${activeTable}/${data.id}`, payload)
+      }
+      return apiClient.post(`/admin/lookups/${activeTable}`, payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["lookups", activeTable] })
@@ -133,10 +136,14 @@ export default function LookupsPage() {
   const handleOpenForm = (item?: any) => {
     if (item) {
       setEditingItem(item)
-      setFormData({ name: getDisplayName(item) })
+      setFormData({
+        name: getDisplayName(item),
+        iso_alpha2: item.iso_alpha2 || "",
+        iso_alpha3: item.iso_alpha3 || "",
+      })
     } else {
       setEditingItem(null)
-      setFormData({ name: "" })
+      setFormData({ name: "", iso_alpha2: "", iso_alpha3: "" })
     }
     setIsFormOpen(true)
   }
@@ -154,7 +161,19 @@ export default function LookupsPage() {
     },
     {
       header: "Name / Value",
-      cell: (item) => getDisplayName(item),
+      cell: (item) => (
+        <div className="flex items-center gap-2">
+          <span>{getDisplayName(item)}</span>
+          {activeTable === "currencies" && item.code && (
+            <span className="text-xs text-muted-foreground">
+              {item.code}{item.symbol ? ` · ${item.symbol}` : ""}
+            </span>
+          )}
+          {activeTable === "nationalities" && item.iso_alpha2 && (
+            <span className="text-xs text-muted-foreground">{item.iso_alpha2}</span>
+          )}
+        </div>
+      ),
     },
     {
       header: "Actions",
@@ -213,16 +232,6 @@ export default function LookupsPage() {
         </Button>
       </div>
 
-      {LOOKUP_TABLES.find(t => t.id === activeTable)?.pendingBackend && (
-        <div className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
-          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
-          <p>
-            This table is not yet supported by the backend admin API. The page is ready, but
-            create/update/delete will fail until the backend whitelists this table.
-          </p>
-        </div>
-      )}
-
       <Card className="border-none shadow-sm">
         <CardHeader className="px-0 pt-0">
           <CardTitle>Data Records</CardTitle>
@@ -254,10 +263,40 @@ export default function LookupsPage() {
               <Input
                 id="name"
                 value={formData.name}
-                onChange={(e) => setFormData({ name: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="col-span-3"
               />
             </div>
+            {activeTable === "nationalities" && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="iso2" className="text-right">
+                    ISO Alpha-2
+                  </Label>
+                  <Input
+                    id="iso2"
+                    maxLength={2}
+                    placeholder="e.g. ID"
+                    value={formData.iso_alpha2}
+                    onChange={(e) => setFormData({ ...formData, iso_alpha2: e.target.value })}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="iso3" className="text-right">
+                    ISO Alpha-3
+                  </Label>
+                  <Input
+                    id="iso3"
+                    maxLength={3}
+                    placeholder="e.g. IDN"
+                    value={formData.iso_alpha3}
+                    onChange={(e) => setFormData({ ...formData, iso_alpha3: e.target.value })}
+                    className="col-span-3"
+                  />
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
