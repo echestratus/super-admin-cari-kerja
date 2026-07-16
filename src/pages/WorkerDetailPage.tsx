@@ -602,6 +602,7 @@ export default function WorkerDetailPage() {
             queryKey={["worker-skills", id]}
             columns={skillColumns}
             getItemLabel={(item) => item.skill_name || item.name || "skill"}
+            getItemId={(item) => item.skill_id || item.id}
             canEdit={false}
             fields={[
               {
