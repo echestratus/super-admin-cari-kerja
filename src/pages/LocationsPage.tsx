@@ -97,7 +97,7 @@ export default function LocationsPage() {
       toast.success("Location saved successfully.")
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to save location. The backend admin endpoint may not be available yet.")
+      toast.error(error.response?.data?.message || "Failed to save location.")
     },
   })
 
@@ -111,7 +111,12 @@ export default function LocationsPage() {
       toast.success("Location deleted successfully.")
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to delete location. The backend admin endpoint may not be available yet.")
+      if (error.response?.status === 409) {
+        toast.error("This province still has cities linked to it. Move or delete its cities first.")
+      } else {
+        toast.error(error.response?.data?.message || "Failed to delete location.")
+      }
+      setDeletingItem(null)
     },
   })
 
