@@ -37,12 +37,18 @@ interface Job {
   id: string
   title: string
   company_name: string
-  status_name: string
+  /** Backend list currently returns `status`; some endpoints may return `status_name`. */
+  status?: string
+  status_name?: string
   created_at?: string
   updated_at?: string
   deleted_at?: string
   salary?: number
   description?: string
+}
+
+function getJobStatus(job: Job): string {
+  return job.status_name || job.status || ""
 }
 
 interface PaginatedResponse {
@@ -58,26 +64,26 @@ interface PaginatedResponse {
 const jobSearchFields: SearchFieldDef[] = [
   { key: "title", label: "Title", getValue: (item: Job) => item.title },
   { key: "company_name", label: "Company", getValue: (item: Job) => item.company_name },
-  { key: "status_name", label: "Status", getValue: (item: Job) => item.status_name },
+  { key: "status", label: "Status", getValue: (item: Job) => getJobStatus(item) },
   { key: "description", label: "Description", getValue: (item: Job) => item.description },
   { key: "salary", label: "Salary", getValue: (item: Job) => item.salary },
 ]
 
 const jobFilters: FilterDef[] = [{
-  key: "status_name",
+  key: "status",
   label: "Status",
-  options: ["PENDING", "APPROVED", "ACTIVE", "REJECTED", "ARCHIVED"].map((value) => ({
+  options: ["PENDING", "DRAFT", "OPEN", "APPROVED", "ACTIVE", "CLOSED", "REJECTED", "ARCHIVED"].map((value) => ({
     value,
     label: value,
   })),
-  getValue: (item: Job) => item.status_name,
+  getValue: (item: Job) => getJobStatus(item),
 }]
 
 const jobSortFields: SortFieldDef[] = [
   { key: "title", getValue: (item: Job) => item.title },
   { key: "company_name", getValue: (item: Job) => item.company_name },
   { key: "created_at", getValue: (item: Job) => item.created_at },
-  { key: "status_name", getValue: (item: Job) => item.status_name },
+  { key: "status", getValue: (item: Job) => getJobStatus(item) },
 ]
 
 export default function JobsPage() {
@@ -107,7 +113,12 @@ export default function JobsPage() {
           search: debouncedSearch
         }
       })
-      return res.data
+      const rows = (res.data?.data || []).map((job: Job) => ({
+        ...job,
+        status_name: getJobStatus(job),
+        status: getJobStatus(job),
+      }))
+      return { ...res.data, data: rows }
     },
   })
 
@@ -167,7 +178,7 @@ export default function JobsPage() {
     setEditingJob(job)
     setFormData({
       title: job.title || "",
-      status_name: job.status_name || "",
+      status_name: getJobStatus(job),
       salary: job.salary?.toString() || "",
       description: job.description || "",
     })
@@ -210,18 +221,19 @@ export default function JobsPage() {
     },
     {
       header: "Status",
-      sortKey: "status_name",
+      sortKey: "status",
       sortable: true,
       cell: (item) => {
+        const status = getJobStatus(item)
         let variant: "default" | "destructive" | "secondary" | "outline" = "default"
         let className = ""
         
-        if (item.status_name === "APPROVED" || item.status_name === "ACTIVE") {
+        if (status === "APPROVED" || status === "ACTIVE" || status === "OPEN") {
           className = "bg-success/10 text-success hover:bg-success/20 border-transparent"
-        } else if (item.status_name === "REJECTED") {
+        } else if (status === "REJECTED" || status === "CLOSED") {
           className = "bg-danger/10 text-danger hover:bg-danger/20 border-transparent"
           variant = "destructive"
-        } else if (item.status_name === "ARCHIVED") {
+        } else if (status === "ARCHIVED" || status === "DRAFT") {
           className = "bg-muted text-muted-foreground hover:bg-muted/80 border-transparent"
           variant = "secondary"
         } else {
@@ -231,7 +243,7 @@ export default function JobsPage() {
 
         return (
           <Badge variant={variant} className={className}>
-            {item.status_name}
+            {status || "UNKNOWN"}
           </Badge>
         )
       },
@@ -239,7 +251,9 @@ export default function JobsPage() {
     {
       header: "Actions",
       className: "text-right",
-      cell: (item) => (
+      cell: (item) => {
+        const status = getJobStatus(item)
+        return (
         <div className="flex justify-end gap-1">
           <Button 
             variant="ghost" 
@@ -251,15 +265,15 @@ export default function JobsPage() {
             <Edit2 className="h-4 w-4" />
           </Button>
           
-          {item.status_name === "PENDING" && (
+          {(status === "PENDING" || status === "DRAFT") && (
             <>
               <Button 
                 variant="ghost" 
                 size="sm"
                 className="text-success hover:text-success hover:bg-success/10"
-                onClick={() => statusMutation.mutate({ id: item.id, status: "APPROVED" })}
+                onClick={() => statusMutation.mutate({ id: item.id, status: "OPEN" })}
                 disabled={statusMutation.isPending}
-                title="Approve"
+                title="Approve / Open"
               >
                 <CheckCircle2 className="h-4 w-4" />
               </Button>
@@ -275,7 +289,7 @@ export default function JobsPage() {
               </Button>
             </>
           )}
-          {(item.status_name === "APPROVED" || item.status_name === "ACTIVE") && (
+          {(status === "APPROVED" || status === "ACTIVE" || status === "OPEN") && (
             <Button 
               variant="ghost" 
               size="sm"
@@ -297,8 +311,9 @@ export default function JobsPage() {
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
-      ),
-    }
+        )
+      },
+    },
   ]
 
   return (

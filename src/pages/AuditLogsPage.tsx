@@ -6,19 +6,22 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { Badge } from "@/components/ui/badge"
 import { getTotalFromMeta } from "@/lib/pagination"
+import { useDebounce } from "@/hooks/use-debounce"
 import { useTableControls } from "@/hooks/use-table-controls"
 import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 
 interface AuditLog {
   id: string
   action: string
-  entity: string
-  entity_id: string
   user_id: string
-  user_email: string
   username?: string
+  user_email?: string
   ip_address: string
+  user_agent?: string
   created_at: string
+  /** Optional fields if backend expands the payload later. */
+  entity?: string
+  entity_id?: string
 }
 
 interface PaginatedResponse {
@@ -35,7 +38,8 @@ const auditSearchFields: SearchFieldDef[] = [
   { key: "action", label: "Action", getValue: (item: AuditLog) => item.action },
   { key: "user", label: "User", getValue: (item: AuditLog) => item.username || item.user_email },
   { key: "ip_address", label: "IP Address", getValue: (item: AuditLog) => item.ip_address },
-  { key: "entity", label: "Entity", getValue: (item: AuditLog) => `${item.entity} ${item.entity_id}` },
+  { key: "user_agent", label: "User Agent", getValue: (item: AuditLog) => item.user_agent },
+  { key: "entity", label: "Entity", getValue: (item: AuditLog) => `${item.entity || ""} ${item.entity_id || ""}` },
 ]
 
 const auditFilters: FilterDef[] = [{
@@ -53,22 +57,24 @@ const auditFilters: FilterDef[] = [{
 const auditSortFields: SortFieldDef[] = [
   { key: "created_at", getValue: (item: AuditLog) => item.created_at },
   { key: "action", getValue: (item: AuditLog) => item.action },
-  { key: "entity", getValue: (item: AuditLog) => item.entity },
   { key: "user", getValue: (item: AuditLog) => item.username || item.user_email },
   { key: "ip_address", getValue: (item: AuditLog) => item.ip_address },
 ]
 
 export default function AuditLogsPage() {
+  const [searchQuery, setSearchQuery] = useState("")
+  const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
   const pageSize = 15
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
-    queryKey: ["audit-logs", page, pageSize],
+    queryKey: ["audit-logs", page, pageSize, debouncedSearch],
     queryFn: async () => {
       const res = await apiClient.get("/admin/audit-logs", {
         params: {
           page,
-          limit: pageSize
+          limit: pageSize,
+          search: debouncedSearch || undefined,
         }
       })
       return res.data
@@ -114,23 +120,12 @@ export default function AuditLogsPage() {
       ),
     },
     {
-      header: "Entity",
-      sortKey: "entity",
-      sortable: true,
-      cell: (item) => (
-        <div className="flex flex-col">
-          <span className="font-medium">{item.entity}</span>
-          <span className="text-xs text-muted-foreground">ID: {item.entity_id}</span>
-        </div>
-      )
-    },
-    {
       header: "Performed By",
       sortKey: "user",
       sortable: true,
       cell: (item) => (
         <div className="flex flex-col">
-          <span className="text-sm">{item.username || item.user_email}</span>
+          <span className="text-sm">{item.username || item.user_email || "Unknown user"}</span>
           <span className="text-xs text-muted-foreground">ID: {item.user_id}</span>
         </div>
       )
@@ -140,7 +135,15 @@ export default function AuditLogsPage() {
       sortKey: "ip_address",
       sortable: true,
       cell: (item) => (
-        <span className="text-sm font-mono">{item.ip_address}</span>
+        <span className="text-sm font-mono">{item.ip_address || "—"}</span>
+      )
+    },
+    {
+      header: "User Agent",
+      cell: (item) => (
+        <span className="text-xs text-muted-foreground line-clamp-2 max-w-[280px] block" title={item.user_agent}>
+          {item.user_agent || (item.entity ? `${item.entity}${item.entity_id ? ` #${item.entity_id}` : ""}` : "—")}
+        </span>
       )
     }
   ]
@@ -162,9 +165,13 @@ export default function AuditLogsPage() {
             columns={columns} 
             data={tableControls.processedData} 
             isLoading={isLoading} 
-            searchQuery={tableControls.searchQuery}
-            onSearchChange={tableControls.setSearchQuery}
-            searchPlaceholder="Search action, user, IP, or entity..."
+            searchQuery={searchQuery}
+            onSearchChange={(query) => {
+              setSearchQuery(query)
+              tableControls.setSearchQuery(query)
+              setPage(1)
+            }}
+            searchPlaceholder="Search username, action, or IP address..."
             searchFields={auditSearchFields}
             selectedSearchFields={tableControls.selectedSearchFields}
             onToggleSearchField={tableControls.toggleSearchField}
@@ -175,8 +182,12 @@ export default function AuditLogsPage() {
             sortBy={tableControls.sortBy}
             sortOrder={tableControls.sortOrder}
             onSortChange={tableControls.toggleSort}
-            onResetControls={tableControls.resetControls}
-            hasActiveControls={tableControls.hasActiveControls}
+            onResetControls={() => {
+              setSearchQuery("")
+              tableControls.resetControls()
+              setPage(1)
+            }}
+            hasActiveControls={!!searchQuery.trim() || tableControls.hasActiveControls}
             pagination={{
               page,
               pageSize,

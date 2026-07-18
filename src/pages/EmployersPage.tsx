@@ -154,7 +154,7 @@ export default function EmployersPage() {
                 </Badge>
               )}
             </div>
-            <div className="text-sm text-muted-foreground">{item.email}</div>
+            <div className="text-sm text-muted-foreground">{item.email || item.user_email || "No company email"}</div>
           </div>
         </div>
       ),
