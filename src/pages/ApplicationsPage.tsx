@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { useDebounce } from "@/hooks/use-debounce"
+import { getTotalFromMeta } from "@/lib/pagination"
 
 import {
   Dialog,
@@ -81,7 +82,7 @@ export default function ApplicationsPage() {
   })
 
   const applications = response?.data || []
-  const totalApplications = response?.meta?.totalData || 0
+  const totalApplications = getTotalFromMeta(response?.meta)
 
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {

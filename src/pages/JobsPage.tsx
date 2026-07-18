@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { Briefcase, CheckCircle2, XCircle, Archive, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { getTotalFromMeta } from "@/lib/pagination"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -84,7 +85,7 @@ export default function JobsPage() {
   })
 
   const jobs = response?.data || []
-  const totalJobs = response?.meta?.totalData || 0
+  const totalJobs = getTotalFromMeta(response?.meta)
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string, status: string }) => {

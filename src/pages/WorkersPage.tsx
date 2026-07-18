@@ -9,6 +9,7 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { User, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { getTotalFromMeta } from "@/lib/pagination"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -72,7 +73,7 @@ export default function WorkersPage() {
   })
 
   const workers = response?.data || []
-  const totalWorkers = response?.meta?.totalData || 0
+  const totalWorkers = getTotalFromMeta(response?.meta)
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {

@@ -311,7 +311,14 @@ function buildPayload(values: Record<string, any>, fields: FieldDef[]): Record<s
     } else if (field.type === "number") {
       payload[field.name] = raw === "" || raw === undefined ? null : Number(raw)
     } else if (field.type === "select") {
-      payload[field.name] = raw === "" || raw === undefined ? null : isNaN(Number(raw)) ? raw : Number(raw)
+      // Keep UUID / non-numeric IDs as strings; only coerce pure numeric lookup IDs.
+      if (raw === "" || raw === undefined || raw === null) {
+        payload[field.name] = null
+      } else if (/^\d+$/.test(String(raw))) {
+        payload[field.name] = Number(raw)
+      } else {
+        payload[field.name] = raw
+      }
     } else {
       payload[field.name] = raw === "" ? null : raw
     }
