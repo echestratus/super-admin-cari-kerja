@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Receipt, Eye } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { getTotalFromMeta } from "@/lib/pagination"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -41,11 +42,14 @@ interface PaymentOrder {
 
 interface PaginatedResponse {
   data: PaymentOrder[]
-  meta: {
-    page: number
-    limit: number
-    totalData: number
-    totalPage: number
+  meta?: {
+    page?: number
+    limit?: number
+    per_page?: number
+    totalData?: number
+    total_data?: number
+    totalPage?: number
+    total_pages?: number
   }
 }
 
@@ -94,7 +98,7 @@ export default function PaymentOrdersPage() {
   })
 
   const orders = response?.data || []
-  const totalOrders = response?.meta?.totalData || 0
+  const totalOrders = getTotalFromMeta(response?.meta)
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -106,9 +110,24 @@ export default function PaymentOrdersPage() {
       toast.success("Order status updated successfully.")
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to update order status. The backend admin endpoint may not be available yet.")
+      toast.error(error.response?.data?.message || "Failed to update order status.")
     },
   })
+
+  const openOrderDetail = async (item: PaymentOrder) => {
+    setViewingOrder(item)
+    setNewStatus(item.status)
+    try {
+      const res = await apiClient.get(`/admin/payment-orders/${item.id}`)
+      const detail = res.data?.data || res.data
+      if (detail?.id) {
+        setViewingOrder(detail)
+        setNewStatus(detail.status)
+      }
+    } catch {
+      // Keep list row data if detail fetch fails.
+    }
+  }
 
   const columns: ColumnDef<PaymentOrder>[] = [
     {
@@ -170,10 +189,7 @@ export default function PaymentOrdersPage() {
           variant="ghost"
           size="sm"
           className="text-muted-foreground hover:text-primary hover:bg-primary/10"
-          onClick={() => {
-            setViewingOrder(item)
-            setNewStatus(item.status)
-          }}
+          onClick={() => openOrderDetail(item)}
         >
           <Eye className="h-4 w-4" />
         </Button>
