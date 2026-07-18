@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, Edit2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 import {
   Dialog,
   DialogContent,
@@ -133,6 +135,44 @@ export default function LookupsPage() {
            item.language_name || item.display_name || item.code || "N/A";
   }
 
+  const searchFields = useMemo<SearchFieldDef[]>(() => {
+    const fields: SearchFieldDef[] = [
+      { key: "id", label: "ID", getValue: (item) => item.id },
+      { key: "name", label: "Name / Value", getValue: (item) => getDisplayName(item) },
+    ]
+    if (activeTable === "currencies") {
+      fields.push(
+        { key: "code", label: "Code", getValue: (item) => item.code },
+        { key: "symbol", label: "Symbol", getValue: (item) => item.symbol }
+      )
+    }
+    if (activeTable === "nationalities") {
+      fields.push(
+        { key: "iso_alpha2", label: "ISO Alpha-2", getValue: (item) => item.iso_alpha2 },
+        { key: "iso_alpha3", label: "ISO Alpha-3", getValue: (item) => item.iso_alpha3 }
+      )
+    }
+    return fields
+  }, [activeTable])
+
+  const sortFields = useMemo<SortFieldDef[]>(
+    () => searchFields.map((field) => ({ key: field.key, getValue: field.getValue })),
+    [searchFields]
+  )
+
+  const tableControls = useTableControls({
+    data: records,
+    searchFields,
+    sortFields,
+    defaultSortBy: "id",
+    defaultSortOrder: "asc",
+  })
+
+  useEffect(() => {
+    tableControls.resetControls()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTable])
+
   const handleOpenForm = (item?: any) => {
     if (item) {
       setEditingItem(item)
@@ -157,10 +197,14 @@ export default function LookupsPage() {
     {
       header: "ID",
       accessorKey: "id",
+      sortKey: "id",
+      sortable: true,
       className: "w-[100px]"
     },
     {
       header: "Name / Value",
+      sortKey: "name",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-2">
           <span>{getDisplayName(item)}</span>
@@ -238,10 +282,22 @@ export default function LookupsPage() {
           <CardDescription>Records for the currently selected lookup table.</CardDescription>
         </CardHeader>
         <CardContent className="px-0">
-          <DataTable 
-            columns={columns} 
-            data={records} 
-            isLoading={isLoading} 
+          <DataTable
+            columns={columns}
+            data={tableControls.processedData}
+            isLoading={isLoading}
+            searchQuery={tableControls.searchQuery}
+            onSearchChange={tableControls.setSearchQuery}
+            searchPlaceholder="Search ID, name, ISO codes, currency code..."
+            searchFields={searchFields}
+            selectedSearchFields={tableControls.selectedSearchFields}
+            onToggleSearchField={tableControls.toggleSearchField}
+            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            sortBy={tableControls.sortBy}
+            sortOrder={tableControls.sortOrder}
+            onSortChange={tableControls.toggleSort}
+            onResetControls={tableControls.resetControls}
+            hasActiveControls={tableControls.hasActiveControls}
           />
         </CardContent>
       </Card>

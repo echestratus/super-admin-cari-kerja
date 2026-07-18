@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, Edit2, Trash2, CreditCard, Zap, Package } from "lucide-react"
 import { toast } from "sonner"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 import {
   Dialog,
   DialogContent,
@@ -105,6 +107,72 @@ export default function PlansPage() {
     },
   })
 
+  const currentPlans = plansData?.[activeTab] || []
+
+  const searchFields = useMemo<SearchFieldDef[]>(() => {
+    const fields: SearchFieldDef[] = [
+      { key: "name", label: "Internal Name", getValue: (item) => item.name },
+      { key: "display_name", label: "Display Name", getValue: (item) => item.display_name },
+      { key: "price_idr", label: "Price", getValue: (item) => item.price_idr },
+      { key: "duration_days", label: "Duration", getValue: (item) => item.duration_days },
+    ]
+    if (activeTab === "subscription") {
+      fields.push({ key: "max_active_posts", label: "Max Posts", getValue: (item) => item.max_active_posts })
+    }
+    if (activeTab === "boost") {
+      fields.push({ key: "boost_priority", label: "Priority", getValue: (item) => item.boost_priority })
+    }
+    return fields
+  }, [activeTab])
+
+  const filters = useMemo<FilterDef[]>(() => {
+    const base: FilterDef[] = [
+      {
+        key: "is_active",
+        label: "Status",
+        options: [
+          { value: "true", label: "Active" },
+          { value: "false", label: "Inactive" },
+        ],
+        getValue: (item) => String(!!item.is_active),
+      },
+    ]
+    if (activeTab === "single_post") {
+      base.push({
+        key: "is_hot",
+        label: "Hot",
+        options: [
+          { value: "true", label: "Hot" },
+          { value: "false", label: "Regular" },
+        ],
+        getValue: (item) => String(!!item.is_hot),
+      })
+    }
+    return base
+  }, [activeTab])
+
+  const sortFields = useMemo<SortFieldDef[]>(
+    () => [
+      ...searchFields.map((field) => ({ key: field.key, getValue: field.getValue })),
+      { key: "is_active", getValue: (item) => (item.is_active ? 1 : 0) },
+    ],
+    [searchFields]
+  )
+
+  const tableControls = useTableControls({
+    data: currentPlans,
+    searchFields,
+    filters,
+    sortFields,
+    defaultSortBy: "price_idr",
+    defaultSortOrder: "asc",
+  })
+
+  useEffect(() => {
+    tableControls.resetControls()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const isCreate = !editingPlan
@@ -187,6 +255,8 @@ export default function PlansPage() {
     const columns: ColumnDef<Plan>[] = [
       {
         header: "Plan",
+        sortKey: "display_name",
+        sortable: true,
         cell: (item) => (
           <div>
             <div className="font-medium text-foreground">{item.display_name}</div>
@@ -196,10 +266,14 @@ export default function PlansPage() {
       },
       {
         header: "Price",
+        sortKey: "price_idr",
+        sortable: true,
         cell: (item) => <span className="font-medium">{formatIDR(item.price_idr)}</span>,
       },
       {
         header: "Duration",
+        sortKey: "duration_days",
+        sortable: true,
         cell: (item) => <span>{item.duration_days} days</span>,
       },
     ]
@@ -207,6 +281,8 @@ export default function PlansPage() {
     if (type === "subscription") {
       columns.push({
         header: "Max Active Posts",
+        sortKey: "max_active_posts",
+        sortable: true,
         cell: (item) => <Badge variant="outline" className="bg-background">{item.max_active_posts}</Badge>,
       })
     }
@@ -224,6 +300,8 @@ export default function PlansPage() {
     if (type === "boost") {
       columns.push({
         header: "Priority",
+        sortKey: "boost_priority",
+        sortable: true,
         cell: (item) => (
           <Badge variant="outline" className="bg-background">
             {item.boost_priority === 1 ? "Hot (Top)" : `Top ${item.boost_priority}`}
@@ -235,6 +313,8 @@ export default function PlansPage() {
     columns.push(
       {
         header: "Status",
+        sortKey: "is_active",
+        sortable: true,
         cell: (item) => (
           <Badge
             variant={item.is_active ? "default" : "secondary"}
@@ -304,8 +384,23 @@ export default function PlansPage() {
               <CardContent className="px-0">
                 <DataTable
                   columns={buildColumns(tab.id)}
-                  data={plansData?.[tab.id] || []}
+                  data={tableControls.processedData}
                   isLoading={isLoading}
+                  searchQuery={tableControls.searchQuery}
+                  onSearchChange={tableControls.setSearchQuery}
+                  searchPlaceholder="Search name, price, duration..."
+                  searchFields={searchFields}
+                  selectedSearchFields={tableControls.selectedSearchFields}
+                  onToggleSearchField={tableControls.toggleSearchField}
+                  onSelectAllSearchFields={tableControls.selectAllSearchFields}
+                  filters={filters}
+                  filterValues={tableControls.filterValues}
+                  onFilterChange={tableControls.setFilterValue}
+                  sortBy={tableControls.sortBy}
+                  sortOrder={tableControls.sortOrder}
+                  onSortChange={tableControls.toggleSort}
+                  onResetControls={tableControls.resetControls}
+                  hasActiveControls={tableControls.hasActiveControls}
                 />
               </CardContent>
             </Card>

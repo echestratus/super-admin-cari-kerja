@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Plus, Edit2, Trash2, MapPin } from "lucide-react"
-import { useDebounce } from "@/hooks/use-debounce"
 import { toast } from "sonner"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { FilterDef, SearchFieldDef } from "@/lib/table-controls"
 import {
   Dialog,
   DialogContent,
@@ -48,10 +49,6 @@ export default function LocationsPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<"provinces" | "cities">("provinces")
 
-  const [citySearch, setCitySearch] = useState("")
-  const debouncedCitySearch = useDebounce(citySearch, 500)
-  const [provinceFilter, setProvinceFilter] = useState<string>("all")
-
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<Province | City | null>(null)
   const [deletingItem, setDeletingItem] = useState<Province | City | null>(null)
@@ -66,19 +63,68 @@ export default function LocationsPage() {
   })
 
   const { data: cities = [], isLoading: citiesLoading } = useQuery<City[]>({
-    queryKey: ["locations", "cities", provinceFilter],
+    queryKey: ["locations", "cities"],
     queryFn: async () => {
-      const params: Record<string, string> = {}
-      if (provinceFilter !== "all") params.province_id = provinceFilter
-      const res = await apiClient.get("/locations/cities", { params })
+      const res = await apiClient.get("/locations/cities")
       return res.data?.data || []
     },
   })
 
   const provinceNameById = new Map(provinces.map((p) => [p.id, p.name]))
-  const filteredCities = cities.filter((c) =>
-    c.name.toLowerCase().includes(debouncedCitySearch.toLowerCase())
+
+  const provinceSearchFields = useMemo<SearchFieldDef[]>(
+    () => [
+      { key: "id", label: "ID", getValue: (item) => item.id },
+      { key: "name", label: "Province Name", getValue: (item) => item.name },
+    ],
+    []
   )
+
+  const provinceControls = useTableControls({
+    data: provinces,
+    searchFields: provinceSearchFields,
+    sortFields: provinceSearchFields.map((field) => ({ key: field.key, getValue: field.getValue })),
+    defaultSortBy: "name",
+  })
+
+  const citySearchFields = useMemo<SearchFieldDef[]>(
+    () => [
+      { key: "id", label: "ID", getValue: (item) => item.id },
+      { key: "name", label: "City Name", getValue: (item) => item.name },
+      {
+        key: "province",
+        label: "Province",
+        getValue: (item) =>
+          item.province_name ||
+          provinces.find((province) => province.id === item.province_id)?.name ||
+          item.province_id,
+      },
+    ],
+    [provinces]
+  )
+
+  const cityFilters = useMemo<FilterDef[]>(
+    () => [
+      {
+        key: "province_id",
+        label: "Province",
+        options: provinces.map((province) => ({
+          value: String(province.id),
+          label: province.name,
+        })),
+        getValue: (item) => String(item.province_id),
+      },
+    ],
+    [provinces]
+  )
+
+  const cityControls = useTableControls({
+    data: cities,
+    searchFields: citySearchFields,
+    filters: cityFilters,
+    sortFields: citySearchFields.map((field) => ({ key: field.key, getValue: field.getValue })),
+    defaultSortBy: "name",
+  })
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -131,7 +177,10 @@ export default function LocationsPage() {
       setEditingItem(null)
       setFormData({
         name: "",
-        province_id: provinceFilter !== "all" ? provinceFilter : "",
+        province_id:
+          cityControls.filterValues.province_id && cityControls.filterValues.province_id !== "all"
+            ? cityControls.filterValues.province_id
+            : "",
       })
     }
     setIsFormOpen(true)
@@ -159,9 +208,11 @@ export default function LocationsPage() {
   )
 
   const provinceColumns: ColumnDef<Province>[] = [
-    { header: "ID", accessorKey: "id", className: "w-[100px]" },
+    { header: "ID", accessorKey: "id", sortKey: "id", sortable: true, className: "w-[100px]" },
     {
       header: "Province Name",
+      sortKey: "name",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-2 font-medium">
           <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -173,9 +224,11 @@ export default function LocationsPage() {
   ]
 
   const cityColumns: ColumnDef<City>[] = [
-    { header: "ID", accessorKey: "id", className: "w-[100px]" },
+    { header: "ID", accessorKey: "id", sortKey: "id", sortable: true, className: "w-[100px]" },
     {
       header: "City Name",
+      sortKey: "name",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-2 font-medium">
           <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -185,6 +238,8 @@ export default function LocationsPage() {
     },
     {
       header: "Province",
+      sortKey: "province",
+      sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background">
           {item.province_name || provinceNameById.get(item.province_id) || `#${item.province_id}`}
@@ -219,7 +274,23 @@ export default function LocationsPage() {
               <CardDescription>All provinces available for worker and job locations.</CardDescription>
             </CardHeader>
             <CardContent className="px-0">
-              <DataTable columns={provinceColumns} data={provinces} isLoading={provincesLoading} />
+              <DataTable
+                columns={provinceColumns}
+                data={provinceControls.processedData}
+                isLoading={provincesLoading}
+                searchQuery={provinceControls.searchQuery}
+                onSearchChange={provinceControls.setSearchQuery}
+                searchPlaceholder="Search province ID or name..."
+                searchFields={provinceSearchFields}
+                selectedSearchFields={provinceControls.selectedSearchFields}
+                onToggleSearchField={provinceControls.toggleSearchField}
+                onSelectAllSearchFields={provinceControls.selectAllSearchFields}
+                sortBy={provinceControls.sortBy}
+                sortOrder={provinceControls.sortOrder}
+                onSortChange={provinceControls.toggleSort}
+                onResetControls={provinceControls.resetControls}
+                hasActiveControls={provinceControls.hasActiveControls}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -230,27 +301,27 @@ export default function LocationsPage() {
               <CardTitle>Cities</CardTitle>
               <CardDescription>Cities grouped by province.</CardDescription>
             </CardHeader>
-            <CardContent className="px-0 space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Input
-                  placeholder="Search city name..."
-                  value={citySearch}
-                  onChange={(e) => setCitySearch(e.target.value)}
-                  className="max-w-sm"
-                />
-                <Select value={provinceFilter} onValueChange={setProvinceFilter}>
-                  <SelectTrigger className="w-full sm:w-[240px]">
-                    <SelectValue placeholder="Filter by province" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Provinces</SelectItem>
-                    {provinces.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <DataTable columns={cityColumns} data={filteredCities} isLoading={citiesLoading} />
+            <CardContent className="px-0">
+              <DataTable
+                columns={cityColumns}
+                data={cityControls.processedData}
+                isLoading={citiesLoading}
+                searchQuery={cityControls.searchQuery}
+                onSearchChange={cityControls.setSearchQuery}
+                searchPlaceholder="Search city ID, name, or province..."
+                searchFields={citySearchFields}
+                selectedSearchFields={cityControls.selectedSearchFields}
+                onToggleSearchField={cityControls.toggleSearchField}
+                onSelectAllSearchFields={cityControls.selectAllSearchFields}
+                filters={cityFilters}
+                filterValues={cityControls.filterValues}
+                onFilterChange={cityControls.setFilterValue}
+                sortBy={cityControls.sortBy}
+                sortOrder={cityControls.sortOrder}
+                onSortChange={cityControls.toggleSort}
+                onResetControls={cityControls.resetControls}
+                hasActiveControls={cityControls.hasActiveControls}
+              />
             </CardContent>
           </Card>
         </TabsContent>
