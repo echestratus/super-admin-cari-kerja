@@ -104,7 +104,7 @@ export default function EmployerDetailPage() {
         company_name: profileForm.company_name,
         company_email: profileForm.company_email || null,
         telephone: profileForm.telephone || null,
-        website: profileForm.website || null,
+        company_website: profileForm.website || null,
         contact_name: profileForm.contact_name || null,
         contact_phone: profileForm.contact_phone || null,
         address: profileForm.address || null,
