@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { ShieldBan, CheckCircle2, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { getTotalFromMeta } from "@/lib/pagination"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -86,7 +87,7 @@ export default function UsersPage() {
   })
 
   const users = response?.data || []
-  const totalUsers = response?.meta?.totalData || 0
+  const totalUsers = getTotalFromMeta(response?.meta)
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, is_suspended }: { id: string, is_suspended: boolean }) => {

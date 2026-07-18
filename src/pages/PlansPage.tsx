@@ -39,9 +39,33 @@ interface Plan {
   price_idr: number
   duration_days: number
   is_active: boolean
+  plan_type?: PlanType
   max_active_posts?: number
   is_hot?: boolean
   boost_priority?: number
+}
+
+function groupPlansByType(raw: unknown): Record<PlanType, Plan[]> {
+  const empty: Record<PlanType, Plan[]> = { subscription: [], single_post: [], boost: [] }
+
+  if (Array.isArray(raw)) {
+    for (const plan of raw as Plan[]) {
+      const type = plan.plan_type
+      if (type && empty[type]) empty[type].push(plan)
+    }
+    return empty
+  }
+
+  if (raw && typeof raw === "object") {
+    const grouped = raw as Partial<Record<PlanType, Plan[]>>
+    return {
+      subscription: grouped.subscription || [],
+      single_post: grouped.single_post || [],
+      boost: grouped.boost || [],
+    }
+  }
+
+  return empty
 }
 
 const PLAN_TABS: { id: PlanType; label: string; icon: typeof CreditCard; description: string }[] = [
@@ -77,22 +101,33 @@ export default function PlansPage() {
     queryKey: ["plans"],
     queryFn: async () => {
       const res = await apiClient.get("/admin/plans")
-      return res.data?.data || { subscription: [], single_post: [], boost: [] }
+      return groupPlansByType(res.data?.data)
     },
   })
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const isCreate = !editingPlan
       const payload: Record<string, unknown> = {
-        name: formData.name,
-        display_name: formData.display_name,
+        name: formData.name.trim(),
+        display_name: formData.display_name.trim(),
         price_idr: Number(formData.price_idr),
         duration_days: Number(formData.duration_days),
         is_active: formData.is_active,
       }
-      if (activeTab === "subscription") payload.max_active_posts = Number(formData.max_active_posts)
-      if (activeTab === "single_post") payload.is_hot = formData.is_hot
-      if (activeTab === "boost") payload.boost_priority = Number(formData.boost_priority)
+
+      // Type-specific fields: required on create; optional on update; never send for other types.
+      if (activeTab === "subscription") {
+        if (isCreate || formData.max_active_posts !== "") {
+          payload.max_active_posts = Number(formData.max_active_posts)
+        }
+      } else if (activeTab === "single_post") {
+        payload.is_hot = formData.is_hot
+      } else if (activeTab === "boost") {
+        if (isCreate || formData.boost_priority !== "") {
+          payload.boost_priority = Number(formData.boost_priority)
+        }
+      }
 
       if (editingPlan) {
         return apiClient.put(`/admin/plans/${activeTab}/${editingPlan.id}`, payload)
@@ -389,9 +424,15 @@ export default function PlansPage() {
               disabled={
                 saveMutation.isPending ||
                 !formData.name.trim() ||
+                formData.name.trim().length > 50 ||
                 !formData.display_name.trim() ||
-                !formData.price_idr ||
-                !formData.duration_days
+                formData.display_name.trim().length > 100 ||
+                formData.price_idr === "" ||
+                Number(formData.price_idr) < 0 ||
+                !formData.duration_days ||
+                Number(formData.duration_days) < 1 ||
+                (!editingPlan && activeTab === "subscription" && (!formData.max_active_posts || Number(formData.max_active_posts) < 1)) ||
+                (!editingPlan && activeTab === "boost" && (!formData.boost_priority || Number(formData.boost_priority) < 1))
               }
             >
               {saveMutation.isPending ? "Saving..." : "Save changes"}

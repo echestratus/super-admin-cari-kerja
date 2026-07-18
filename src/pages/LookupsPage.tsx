@@ -317,7 +317,7 @@ export default function LookupsPage() {
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the record 
-              <strong className="mx-1 text-foreground">"{editingItem?.name}"</strong> 
+              <strong className="mx-1 text-foreground">"{getDisplayName(editingItem)}"</strong> 
               from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>

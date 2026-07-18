@@ -9,6 +9,7 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { Building2, CheckCircle2, XCircle, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
+import { getTotalFromMeta } from "@/lib/pagination"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -73,7 +74,7 @@ export default function EmployersPage() {
   })
 
   const employers = response?.data || []
-  const totalEmployers = response?.meta?.totalData || 0
+  const totalEmployers = getTotalFromMeta(response?.meta)
 
   const verifyMutation = useMutation({
     mutationFn: async ({ id, is_verified }: { id: string, is_verified: boolean }) => {

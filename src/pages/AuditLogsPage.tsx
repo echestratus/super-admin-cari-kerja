@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { Badge } from "@/components/ui/badge"
+import { getTotalFromMeta } from "@/lib/pagination"
 
 interface AuditLog {
   id: string
@@ -45,7 +46,7 @@ export default function AuditLogsPage() {
   })
 
   const logs = response?.data || []
-  const totalLogs = response?.meta?.totalData || 0
+  const totalLogs = getTotalFromMeta(response?.meta)
 
   const columns: ColumnDef<AuditLog>[] = [
     {
