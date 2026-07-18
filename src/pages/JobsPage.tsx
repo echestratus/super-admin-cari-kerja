@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 
 interface Job {
   id: string
@@ -52,6 +54,31 @@ interface PaginatedResponse {
     totalPage: number
   }
 }
+
+const jobSearchFields: SearchFieldDef[] = [
+  { key: "title", label: "Title", getValue: (item: Job) => item.title },
+  { key: "company_name", label: "Company", getValue: (item: Job) => item.company_name },
+  { key: "status_name", label: "Status", getValue: (item: Job) => item.status_name },
+  { key: "description", label: "Description", getValue: (item: Job) => item.description },
+  { key: "salary", label: "Salary", getValue: (item: Job) => item.salary },
+]
+
+const jobFilters: FilterDef[] = [{
+  key: "status_name",
+  label: "Status",
+  options: ["PENDING", "APPROVED", "ACTIVE", "REJECTED", "ARCHIVED"].map((value) => ({
+    value,
+    label: value,
+  })),
+  getValue: (item: Job) => item.status_name,
+}]
+
+const jobSortFields: SortFieldDef[] = [
+  { key: "title", getValue: (item: Job) => item.title },
+  { key: "company_name", getValue: (item: Job) => item.company_name },
+  { key: "created_at", getValue: (item: Job) => item.created_at },
+  { key: "status_name", getValue: (item: Job) => item.status_name },
+]
 
 export default function JobsPage() {
   const queryClient = useQueryClient()
@@ -86,6 +113,12 @@ export default function JobsPage() {
 
   const jobs = response?.data || []
   const totalJobs = getTotalFromMeta(response?.meta)
+  const tableControls = useTableControls({
+    data: jobs,
+    searchFields: jobSearchFields,
+    filters: jobFilters,
+    sortFields: jobSortFields,
+  })
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string, status: string }) => {
@@ -143,6 +176,8 @@ export default function JobsPage() {
   const columns: ColumnDef<Job>[] = [
     {
       header: "Job Details",
+      sortKey: "title",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-md bg-accent/10 flex items-center justify-center text-accent font-medium">
@@ -164,6 +199,8 @@ export default function JobsPage() {
     },
     {
       header: "Timestamps",
+      sortKey: "created_at",
+      sortable: true,
       cell: (item) => (
         <div className="text-xs text-muted-foreground flex flex-col gap-1">
           <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
@@ -173,6 +210,8 @@ export default function JobsPage() {
     },
     {
       header: "Status",
+      sortKey: "status_name",
+      sortable: true,
       cell: (item) => {
         let variant: "default" | "destructive" | "secondary" | "outline" = "default"
         let className = ""
@@ -277,14 +316,31 @@ export default function JobsPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={jobs} 
+            data={tableControls.processedData} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
               setSearchQuery(q)
+              tableControls.setSearchQuery(q)
               setPage(1)
             }}
             searchPlaceholder="Search by job title or company..."
+            searchFields={jobSearchFields}
+            selectedSearchFields={tableControls.selectedSearchFields}
+            onToggleSearchField={tableControls.toggleSearchField}
+            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            filters={jobFilters}
+            filterValues={tableControls.filterValues}
+            onFilterChange={tableControls.setFilterValue}
+            sortBy={tableControls.sortBy}
+            sortOrder={tableControls.sortOrder}
+            onSortChange={tableControls.toggleSort}
+            onResetControls={() => {
+              setSearchQuery("")
+              setPage(1)
+              tableControls.resetControls()
+            }}
+            hasActiveControls={tableControls.hasActiveControls}
             pagination={{
               page,
               pageSize,

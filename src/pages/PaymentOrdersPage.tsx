@@ -20,6 +20,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 
 interface PaymentOrder {
   id: string
@@ -69,6 +71,23 @@ const ORDER_TYPE_LABELS: Record<string, string> = {
 const formatIDR = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value)
 
+const paymentSearchFields: SearchFieldDef[] = [
+  { key: "company_name", label: "Company", getValue: (item: PaymentOrder) => item.company_name },
+  { key: "plan_name", label: "Plan", getValue: (item: PaymentOrder) => item.plan_name },
+  { key: "xendit_invoice_id", label: "Invoice ID", getValue: (item: PaymentOrder) => item.xendit_invoice_id },
+  { key: "xendit_external_id", label: "External ID", getValue: (item: PaymentOrder) => item.xendit_external_id },
+  { key: "amount", label: "Amount", getValue: (item: PaymentOrder) => item.amount },
+]
+
+const paymentSortFields: SortFieldDef[] = [
+  { key: "xendit_external_id", getValue: (item: PaymentOrder) => item.xendit_external_id || item.id },
+  { key: "order_type", getValue: (item: PaymentOrder) => item.order_type },
+  { key: "plan_name", getValue: (item: PaymentOrder) => item.plan_name || item.plan_id },
+  { key: "amount", getValue: (item: PaymentOrder) => item.amount },
+  { key: "status", getValue: (item: PaymentOrder) => item.status },
+  { key: "created_at", getValue: (item: PaymentOrder) => item.created_at },
+]
+
 export default function PaymentOrdersPage() {
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
@@ -99,6 +118,11 @@ export default function PaymentOrdersPage() {
 
   const orders = response?.data || []
   const totalOrders = getTotalFromMeta(response?.meta)
+  const tableControls = useTableControls({
+    data: orders,
+    searchFields: paymentSearchFields,
+    sortFields: paymentSortFields,
+  })
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -132,6 +156,8 @@ export default function PaymentOrdersPage() {
   const columns: ColumnDef<PaymentOrder>[] = [
     {
       header: "Order",
+      sortKey: "xendit_external_id",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-md bg-secondary/10 flex items-center justify-center text-secondary">
@@ -150,6 +176,8 @@ export default function PaymentOrdersPage() {
     },
     {
       header: "Type",
+      sortKey: "order_type",
+      sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background">
           {ORDER_TYPE_LABELS[item.order_type] || item.order_type}
@@ -158,14 +186,20 @@ export default function PaymentOrdersPage() {
     },
     {
       header: "Plan",
+      sortKey: "plan_name",
+      sortable: true,
       cell: (item) => <span className="text-sm">{item.plan_name || `#${item.plan_id}`}</span>,
     },
     {
       header: "Amount",
+      sortKey: "amount",
+      sortable: true,
       cell: (item) => <span className="font-medium">{formatIDR(item.amount)}</span>,
     },
     {
       header: "Status",
+      sortKey: "status",
+      sortable: true,
       cell: (item) => (
         <Badge className={STATUS_STYLES[item.status] || ""} variant="secondary">
           {item.status}
@@ -174,6 +208,8 @@ export default function PaymentOrdersPage() {
     },
     {
       header: "Dates",
+      sortKey: "created_at",
+      sortable: true,
       cell: (item) => (
         <div className="text-xs text-muted-foreground flex flex-col gap-1">
           <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : "N/A"}</div>
@@ -244,14 +280,28 @@ export default function PaymentOrdersPage() {
         <CardContent className="px-0">
           <DataTable
             columns={columns}
-            data={orders}
+            data={tableControls.processedData}
             isLoading={isLoading}
             searchQuery={searchQuery}
             onSearchChange={(q) => {
               setSearchQuery(q)
+              tableControls.setSearchQuery(q)
               setPage(1)
             }}
             searchPlaceholder="Search by company or invoice ID..."
+            searchFields={paymentSearchFields}
+            selectedSearchFields={tableControls.selectedSearchFields}
+            onToggleSearchField={tableControls.toggleSearchField}
+            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            sortBy={tableControls.sortBy}
+            sortOrder={tableControls.sortOrder}
+            onSortChange={tableControls.toggleSort}
+            onResetControls={() => {
+              setSearchQuery("")
+              setPage(1)
+              tableControls.resetControls()
+            }}
+            hasActiveControls={tableControls.hasActiveControls}
             pagination={{
               page,
               pageSize,

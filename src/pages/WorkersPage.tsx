@@ -21,6 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 
 interface Worker {
   id: string
@@ -46,6 +48,44 @@ interface PaginatedResponse {
     totalPage: number
   }
 }
+
+const getGenderLabel = (genderId?: number) =>
+  genderId === 1 ? "Male" : genderId === 2 ? "Female" : "Not Specified"
+
+const workerSearchFields: SearchFieldDef[] = [
+  { key: "name", label: "Name", getValue: (item: Worker) => item.name },
+  { key: "telephone", label: "Telephone", getValue: (item: Worker) => item.telephone },
+  { key: "user_email", label: "Email", getValue: (item: Worker) => item.user_email },
+  { key: "user_username", label: "Username", getValue: (item: Worker) => item.user_username },
+  { key: "gender", label: "Gender", getValue: (item: Worker) => getGenderLabel(item.gender_id) },
+  { key: "address", label: "Address", getValue: (item: Worker) => item.address },
+]
+
+const workerFilters: FilterDef[] = [
+  {
+    key: "gender_id",
+    label: "Gender",
+    options: [
+      { value: "1", label: "Male" },
+      { value: "2", label: "Female" },
+    ],
+    getValue: (item: Worker) => item.gender_id,
+  },
+  {
+    key: "deleted",
+    label: "Record",
+    options: [{ value: "false", label: "Active" }, { value: "true", label: "Deleted" }],
+    getValue: (item: Worker) => Boolean(item.deleted_at),
+  },
+]
+
+const workerSortFields: SortFieldDef[] = [
+  { key: "name", getValue: (item: Worker) => item.name },
+  { key: "user_email", getValue: (item: Worker) => item.user_email },
+  { key: "gender", getValue: (item: Worker) => getGenderLabel(item.gender_id) },
+  { key: "date_of_birth", getValue: (item: Worker) => item.date_of_birth },
+  { key: "created_at", getValue: (item: Worker) => item.created_at },
+]
 
 export default function WorkersPage() {
   const queryClient = useQueryClient()
@@ -74,6 +114,12 @@ export default function WorkersPage() {
 
   const workers = response?.data || []
   const totalWorkers = getTotalFromMeta(response?.meta)
+  const tableControls = useTableControls({
+    data: workers,
+    searchFields: workerSearchFields,
+    filters: workerFilters,
+    sortFields: workerSortFields,
+  })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -93,6 +139,8 @@ export default function WorkersPage() {
   const columns: ColumnDef<Worker>[] = [
     {
       header: "Worker Details",
+      sortKey: "name",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-md bg-secondary/10 flex items-center justify-center text-secondary font-medium">
@@ -114,6 +162,8 @@ export default function WorkersPage() {
     },
     {
       header: "Account Info",
+      sortKey: "user_email",
+      sortable: true,
       cell: (item) => (
         <div>
           {item.user_email ? (
@@ -127,14 +177,18 @@ export default function WorkersPage() {
     },
     {
       header: "Gender",
+      sortKey: "gender",
+      sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background capitalize">
-          {item.gender_id === 1 ? "Male" : item.gender_id === 2 ? "Female" : "Not Specified"}
+          {getGenderLabel(item.gender_id)}
         </Badge>
       ),
     },
     {
       header: "Age",
+      sortKey: "date_of_birth",
+      sortable: true,
       cell: (item) => {
         let age = "N/A"
         if (item.date_of_birth) {
@@ -147,6 +201,8 @@ export default function WorkersPage() {
     },
     {
       header: "Timestamps",
+      sortKey: "created_at",
+      sortable: true,
       cell: (item) => (
         <div className="text-xs text-muted-foreground flex flex-col gap-1">
           <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
@@ -196,14 +252,31 @@ export default function WorkersPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={workers} 
+            data={tableControls.processedData} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
               setSearchQuery(q)
+              tableControls.setSearchQuery(q)
               setPage(1)
             }}
             searchPlaceholder="Search by worker name or email..."
+            searchFields={workerSearchFields}
+            selectedSearchFields={tableControls.selectedSearchFields}
+            onToggleSearchField={tableControls.toggleSearchField}
+            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            filters={workerFilters}
+            filterValues={tableControls.filterValues}
+            onFilterChange={tableControls.setFilterValue}
+            sortBy={tableControls.sortBy}
+            sortOrder={tableControls.sortOrder}
+            onSortChange={tableControls.toggleSort}
+            onResetControls={() => {
+              setSearchQuery("")
+              setPage(1)
+              tableControls.resetControls()
+            }}
+            hasActiveControls={tableControls.hasActiveControls}
             pagination={{
               page,
               pageSize,

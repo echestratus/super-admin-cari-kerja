@@ -31,6 +31,8 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 
 interface User {
   id: string
@@ -52,6 +54,43 @@ interface PaginatedResponse {
     totalPage: number
   }
 }
+
+const getRoleLabel = (roleId: number) =>
+  roleId === 3 ? "Super Admin" : roleId === 2 ? "Recruiter" : roleId === 4 ? "Admin" : "Job Seeker"
+
+const userSearchFields: SearchFieldDef[] = [
+  { key: "username", label: "Username", getValue: (item: User) => item.username },
+  { key: "email", label: "Email", getValue: (item: User) => item.email },
+  { key: "role", label: "Role", getValue: (item: User) => getRoleLabel(item.role_id) },
+  { key: "status", label: "Status", getValue: (item: User) => item.is_suspended ? "Suspended" : "Active" },
+]
+
+const userFilters: FilterDef[] = [
+  {
+    key: "role_id",
+    label: "Role",
+    options: [
+      { value: "1", label: "Job Seeker" },
+      { value: "2", label: "Recruiter" },
+      { value: "4", label: "Admin" },
+      { value: "3", label: "Super Admin" },
+    ],
+    getValue: (item: User) => item.role_id,
+  },
+  {
+    key: "is_suspended",
+    label: "Status",
+    options: [{ value: "false", label: "Active" }, { value: "true", label: "Suspended" }],
+    getValue: (item: User) => item.is_suspended,
+  },
+]
+
+const userSortFields: SortFieldDef[] = [
+  { key: "username", getValue: (item: User) => item.username },
+  { key: "role", getValue: (item: User) => getRoleLabel(item.role_id) },
+  { key: "status", getValue: (item: User) => item.is_suspended },
+  { key: "created_at", getValue: (item: User) => item.created_at },
+]
 
 export default function UsersPage() {
   const queryClient = useQueryClient()
@@ -88,6 +127,12 @@ export default function UsersPage() {
 
   const users = response?.data || []
   const totalUsers = getTotalFromMeta(response?.meta)
+  const tableControls = useTableControls({
+    data: users,
+    searchFields: userSearchFields,
+    filters: userFilters,
+    sortFields: userSortFields,
+  })
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, is_suspended }: { id: string, is_suspended: boolean }) => {
@@ -151,6 +196,8 @@ export default function UsersPage() {
   const columns: ColumnDef<User>[] = [
     {
       header: "User Details",
+      sortKey: "username",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
@@ -165,14 +212,18 @@ export default function UsersPage() {
     },
     {
       header: "Role",
+      sortKey: "role",
+      sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background">
-          {item.role_id === 3 ? "Super Admin" : item.role_id === 2 ? "Recruiter" : item.role_id === 4 ? "Admin" : "Job Seeker"}
+          {getRoleLabel(item.role_id)}
         </Badge>
       ),
     },
     {
       header: "Status",
+      sortKey: "status",
+      sortable: true,
       cell: (item) => (
         <div className="flex gap-2">
           <Badge 
@@ -191,6 +242,8 @@ export default function UsersPage() {
     },
     {
       header: "Timestamps",
+      sortKey: "created_at",
+      sortable: true,
       cell: (item) => (
         <div className="text-xs text-muted-foreground flex flex-col gap-1">
           <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
@@ -249,14 +302,31 @@ export default function UsersPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={users} 
+            data={tableControls.processedData} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
               setSearchQuery(q)
+              tableControls.setSearchQuery(q)
               setPage(1)
             }}
             searchPlaceholder="Search by name or email..."
+            searchFields={userSearchFields}
+            selectedSearchFields={tableControls.selectedSearchFields}
+            onToggleSearchField={tableControls.toggleSearchField}
+            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            filters={userFilters}
+            filterValues={tableControls.filterValues}
+            onFilterChange={tableControls.setFilterValue}
+            sortBy={tableControls.sortBy}
+            sortOrder={tableControls.sortOrder}
+            onSortChange={tableControls.toggleSort}
+            onResetControls={() => {
+              setSearchQuery("")
+              setPage(1)
+              tableControls.resetControls()
+            }}
+            hasActiveControls={tableControls.hasActiveControls}
             pagination={{
               page,
               pageSize,
