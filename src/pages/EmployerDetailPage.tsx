@@ -154,6 +154,8 @@ export default function EmployerDetailPage() {
   const jobPostColumns: ColumnDef<any>[] = [
     {
       header: "Job Post",
+      sortKey: "title",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium">{item.title}</div>
@@ -165,6 +167,8 @@ export default function EmployerDetailPage() {
     },
     {
       header: "Status",
+      sortKey: "status_name",
+      sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background">
           {item.status_name || `#${item.job_post_status_id}`}
@@ -173,6 +177,8 @@ export default function EmployerDetailPage() {
     },
     {
       header: "Created",
+      sortKey: "created_at",
+      sortable: true,
       cell: (item) => (
         <span className="text-xs text-muted-foreground">
           {item.created_at ? new Date(item.created_at).toLocaleDateString() : "N/A"}
@@ -184,6 +190,8 @@ export default function EmployerDetailPage() {
   const subscriptionColumns: ColumnDef<any>[] = [
     {
       header: "Plan",
+      sortKey: "plan_name",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium">{item.plan_display_name || item.plan_name || `#${item.plan_id}`}</div>
@@ -195,6 +203,8 @@ export default function EmployerDetailPage() {
     },
     {
       header: "Period",
+      sortKey: "starts_at",
+      sortable: true,
       cell: (item) => (
         <span className="text-sm">
           {item.starts_at ? new Date(item.starts_at).toLocaleDateString() : "?"} —{" "}
@@ -204,6 +214,8 @@ export default function EmployerDetailPage() {
     },
     {
       header: "Status",
+      sortKey: "is_active",
+      sortable: true,
       cell: (item) => (
         <Badge
           variant={item.is_active ? "default" : "secondary"}
@@ -218,6 +230,8 @@ export default function EmployerDetailPage() {
   const orderColumns: ColumnDef<any>[] = [
     {
       header: "Order",
+      sortKey: "xendit_external_id",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium text-sm">{item.xendit_external_id || item.id?.slice(0, 8)}</div>
@@ -227,16 +241,22 @@ export default function EmployerDetailPage() {
     },
     {
       header: "Amount",
+      sortKey: "amount",
+      sortable: true,
       cell: (item) => <span className="font-medium">{formatIDR(Number(item.amount || 0))}</span>,
     },
     {
       header: "Status",
+      sortKey: "status",
+      sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background capitalize">{item.status}</Badge>
       ),
     },
     {
       header: "Created",
+      sortKey: "created_at",
+      sortable: true,
       cell: (item) => (
         <span className="text-xs text-muted-foreground">
           {item.created_at ? new Date(item.created_at).toLocaleDateString() : "N/A"}
@@ -447,6 +467,15 @@ export default function EmployerDetailPage() {
             queryKey={["employer-job-posts", id]}
             columns={jobPostColumns}
             getItemLabel={(item) => item.title}
+            searchFields={[
+              { key: "title", label: "Title", getValue: (item) => item.title },
+              { key: "city", label: "City", getValue: (item) => item.city },
+              { key: "province", label: "Province", getValue: (item) => item.province },
+              { key: "status_name", label: "Status", getValue: (item) => item.status_name },
+              { key: "description", label: "Description", getValue: (item) => item.description },
+              { key: "created_at", label: "Created Date", getValue: (item) => item.created_at },
+            ]}
+            defaultSortBy="created_at"
             canCreate={false}
             canEdit={false}
             fields={[]}
@@ -462,6 +491,23 @@ export default function EmployerDetailPage() {
             queryKey={["employer-subscriptions", id]}
             columns={subscriptionColumns}
             getItemLabel={(item) => item.plan_display_name || item.plan_name || "subscription"}
+            searchFields={[
+              { key: "plan_name", label: "Plan", getValue: (item) => item.plan_display_name || item.plan_name },
+              { key: "price_idr", label: "Price", getValue: (item) => item.price_idr },
+              { key: "starts_at", label: "Start Date", getValue: (item) => item.starts_at },
+              { key: "expires_at", label: "Expiry Date", getValue: (item) => item.expires_at },
+            ]}
+            filters={[{
+              key: "is_active",
+              label: "Active",
+              options: [{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }],
+              getValue: (item) => item.is_active,
+            }]}
+            sortFields={[
+              { key: "plan_name", getValue: (item) => item.plan_display_name || item.plan_name },
+              { key: "starts_at", getValue: (item) => item.starts_at },
+              { key: "is_active", getValue: (item) => item.is_active },
+            ]}
             canCreate={false}
             fields={[
               { name: "expires_at", label: "Expires At", type: "date", required: true },
@@ -475,6 +521,15 @@ export default function EmployerDetailPage() {
             queryKey={["employer-payment-orders", id]}
             columns={orderColumns}
             getItemLabel={(item) => item.xendit_external_id || "order"}
+            searchFields={[
+              { key: "xendit_external_id", label: "External ID", getValue: (item) => item.xendit_external_id },
+              { key: "xendit_invoice_id", label: "Invoice ID", getValue: (item) => item.xendit_invoice_id },
+              { key: "order_type", label: "Type", getValue: (item) => item.order_type },
+              { key: "status", label: "Status", getValue: (item) => item.status },
+              { key: "amount", label: "Amount", getValue: (item) => item.amount },
+              { key: "created_at", label: "Created Date", getValue: (item) => item.created_at },
+            ]}
+            defaultSortBy="created_at"
             canCreate={false}
             canEdit={false}
             canDelete={false}

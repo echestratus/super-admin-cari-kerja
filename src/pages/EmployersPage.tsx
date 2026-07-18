@@ -21,6 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 
 interface Employer {
   id: string
@@ -47,6 +49,27 @@ interface PaginatedResponse {
     totalPage: number
   }
 }
+
+const employerSearchFields: SearchFieldDef[] = [
+  { key: "company_name", label: "Company", getValue: (item: Employer) => item.company_name },
+  { key: "email", label: "Company Email", getValue: (item: Employer) => item.email },
+  { key: "user_email", label: "User Email", getValue: (item: Employer) => item.user_email },
+  { key: "user_username", label: "Username", getValue: (item: Employer) => item.user_username },
+]
+
+const employerFilters: FilterDef[] = [{
+  key: "is_verified",
+  label: "Verification",
+  options: [{ value: "true", label: "Verified" }, { value: "false", label: "Pending" }],
+  getValue: (item: Employer) => item.is_verified,
+}]
+
+const employerSortFields: SortFieldDef[] = [
+  { key: "company_name", getValue: (item: Employer) => item.company_name },
+  { key: "user_email", getValue: (item: Employer) => item.user_email },
+  { key: "is_verified", getValue: (item: Employer) => item.is_verified },
+  { key: "created_at", getValue: (item: Employer) => item.created_at },
+]
 
 export default function EmployersPage() {
   const queryClient = useQueryClient()
@@ -75,6 +98,12 @@ export default function EmployersPage() {
 
   const employers = response?.data || []
   const totalEmployers = getTotalFromMeta(response?.meta)
+  const tableControls = useTableControls({
+    data: employers,
+    searchFields: employerSearchFields,
+    filters: employerFilters,
+    sortFields: employerSortFields,
+  })
 
   const verifyMutation = useMutation({
     mutationFn: async ({ id, is_verified }: { id: string, is_verified: boolean }) => {
@@ -109,6 +138,8 @@ export default function EmployersPage() {
   const columns: ColumnDef<Employer>[] = [
     {
       header: "Company Details",
+      sortKey: "company_name",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-md bg-secondary/10 flex items-center justify-center text-secondary font-medium">
@@ -123,13 +154,15 @@ export default function EmployersPage() {
                 </Badge>
               )}
             </div>
-            <div className="text-sm text-muted-foreground">{item.email}</div>
+            <div className="text-sm text-muted-foreground">{item.email || item.user_email || "No company email"}</div>
           </div>
         </div>
       ),
     },
     {
       header: "Account Info",
+      sortKey: "user_email",
+      sortable: true,
       cell: (item) => (
         <div>
           {item.user_email ? (
@@ -143,6 +176,8 @@ export default function EmployersPage() {
     },
     {
       header: "Status",
+      sortKey: "is_verified",
+      sortable: true,
       cell: (item) => (
         <Badge 
           variant={item.is_verified ? "default" : "secondary"}
@@ -154,6 +189,8 @@ export default function EmployersPage() {
     },
     {
       header: "Timestamps",
+      sortKey: "created_at",
+      sortable: true,
       cell: (item) => (
         <div className="text-xs text-muted-foreground flex flex-col gap-1">
           <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
@@ -214,14 +251,31 @@ export default function EmployersPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={employers} 
+            data={tableControls.processedData} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
               setSearchQuery(q)
+              tableControls.setSearchQuery(q)
               setPage(1)
             }}
             searchPlaceholder="Search by company name or email..."
+            searchFields={employerSearchFields}
+            selectedSearchFields={tableControls.selectedSearchFields}
+            onToggleSearchField={tableControls.toggleSearchField}
+            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            filters={employerFilters}
+            filterValues={tableControls.filterValues}
+            onFilterChange={tableControls.setFilterValue}
+            sortBy={tableControls.sortBy}
+            sortOrder={tableControls.sortOrder}
+            onSortChange={tableControls.toggleSort}
+            onResetControls={() => {
+              setSearchQuery("")
+              setPage(1)
+              tableControls.resetControls()
+            }}
+            hasActiveControls={tableControls.hasActiveControls}
             pagination={{
               page,
               pageSize,

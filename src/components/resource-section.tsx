@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Edit2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 import {
   Dialog,
   DialogContent,
@@ -63,6 +65,11 @@ interface ResourceSectionProps {
   toPayload?: (values: Record<string, any>) => Record<string, any>
   /** Extract initial form values from an existing item. */
   fromItem?: (item: any) => Record<string, any>
+  searchFields?: SearchFieldDef[]
+  filters?: FilterDef[]
+  sortFields?: SortFieldDef[]
+  defaultSortBy?: string | null
+  searchPlaceholder?: string
 }
 
 function defaultValues(fields: FieldDef[]): Record<string, any> {
@@ -85,6 +92,11 @@ export function ResourceSection({
   canDelete = true,
   toPayload,
   fromItem,
+  searchFields = [],
+  filters = [],
+  sortFields = [],
+  defaultSortBy = null,
+  searchPlaceholder = "Search across selected fields...",
 }: ResourceSectionProps) {
   const queryClient = useQueryClient()
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -99,6 +111,20 @@ export function ResourceSection({
       const body = res.data?.data
       return Array.isArray(body) ? body : body?.data || []
     },
+  })
+
+  const resolvedSortFields = useMemo<SortFieldDef[]>(() => {
+    if (sortFields.length > 0) return sortFields
+    return searchFields.map((field) => ({ key: field.key, getValue: field.getValue }))
+  }, [sortFields, searchFields])
+
+  const tableControls = useTableControls({
+    data: records,
+    searchFields,
+    filters,
+    sortFields: resolvedSortFields,
+    defaultSortBy,
+    clientSide: true,
   })
 
   const saveMutation = useMutation({
@@ -144,8 +170,16 @@ export function ResourceSection({
     setIsFormOpen(true)
   }
 
+  const sortableKeys = new Set(resolvedSortFields.map((field) => field.key))
   const allColumns: ColumnDef<any>[] = [
-    ...columns,
+    ...columns.map((column) => ({
+      ...column,
+      sortable:
+        column.sortable ??
+        (!!(column.sortKey || column.accessorKey) &&
+          sortableKeys.has(String(column.sortKey || column.accessorKey))),
+      sortKey: column.sortKey || (column.accessorKey ? String(column.accessorKey) : undefined),
+    })),
     ...(canEdit || canDelete
       ? [
           {
@@ -205,7 +239,26 @@ export function ResourceSection({
               : "Failed to load data."}
           </div>
         ) : (
-          <DataTable columns={allColumns} data={records} isLoading={isLoading} />
+          <DataTable
+            columns={allColumns}
+            data={tableControls.processedData}
+            isLoading={isLoading}
+            searchQuery={searchFields.length > 0 ? tableControls.searchQuery : undefined}
+            onSearchChange={searchFields.length > 0 ? tableControls.setSearchQuery : undefined}
+            searchPlaceholder={searchPlaceholder}
+            searchFields={searchFields}
+            selectedSearchFields={tableControls.selectedSearchFields}
+            onToggleSearchField={tableControls.toggleSearchField}
+            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            filters={filters}
+            filterValues={tableControls.filterValues}
+            onFilterChange={tableControls.setFilterValue}
+            sortBy={tableControls.sortBy}
+            sortOrder={tableControls.sortOrder}
+            onSortChange={resolvedSortFields.length > 0 ? tableControls.toggleSort : undefined}
+            onResetControls={tableControls.resetControls}
+            hasActiveControls={tableControls.hasActiveControls}
+          />
         )}
       </CardContent>
 

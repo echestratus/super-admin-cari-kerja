@@ -31,16 +31,30 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { Edit2, Trash2 } from "lucide-react"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 
 interface Application {
   id: string
   worker_name: string
   job_title: string
   company_name?: string
-  status_name: string
+  /** Backend list currently returns `status`; some endpoints may return `status_name`. */
+  status?: string
+  status_name?: string
+  /** Backend list returns `applied_at`; UI also accepts `created_at`. */
+  applied_at?: string
   created_at?: string
   updated_at?: string
   deleted_at?: string
+}
+
+function getApplicationStatus(application: Application): string {
+  return application.status_name || application.status || "PENDING"
+}
+
+function getApplicationDate(application: Application): string | undefined {
+  return application.applied_at || application.created_at
 }
 
 interface PaginatedResponse {
@@ -52,6 +66,30 @@ interface PaginatedResponse {
     totalPage: number
   }
 }
+
+const applicationSearchFields: SearchFieldDef[] = [
+  { key: "worker_name", label: "Applicant", getValue: (item: Application) => item.worker_name },
+  { key: "job_title", label: "Job", getValue: (item: Application) => item.job_title },
+  { key: "company_name", label: "Company", getValue: (item: Application) => item.company_name },
+  { key: "status", label: "Status", getValue: (item: Application) => getApplicationStatus(item) },
+]
+
+const applicationFilters: FilterDef[] = [{
+  key: "status",
+  label: "Status",
+  options: ["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN"].map((value) => ({
+    value,
+    label: value,
+  })),
+  getValue: (item: Application) => getApplicationStatus(item),
+}]
+
+const applicationSortFields: SortFieldDef[] = [
+  { key: "worker_name", getValue: (item: Application) => item.worker_name },
+  { key: "job_title", getValue: (item: Application) => item.job_title },
+  { key: "applied_at", getValue: (item: Application) => getApplicationDate(item) },
+  { key: "status", getValue: (item: Application) => getApplicationStatus(item) },
+]
 
 export default function ApplicationsPage() {
   const queryClient = useQueryClient()
@@ -77,12 +115,25 @@ export default function ApplicationsPage() {
           search: debouncedSearch
         }
       })
-      return res.data
+      const rows = (res.data?.data || []).map((application: Application) => ({
+        ...application,
+        status_name: getApplicationStatus(application),
+        status: getApplicationStatus(application),
+        created_at: getApplicationDate(application),
+        applied_at: getApplicationDate(application),
+      }))
+      return { ...res.data, data: rows }
     },
   })
 
   const applications = response?.data || []
   const totalApplications = getTotalFromMeta(response?.meta)
+  const tableControls = useTableControls({
+    data: applications,
+    searchFields: applicationSearchFields,
+    filters: applicationFilters,
+    sortFields: applicationSortFields,
+  })
 
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -116,13 +167,15 @@ export default function ApplicationsPage() {
   const handleEditClick = (application: Application) => {
     setEditingApplication(application)
     setFormData({
-      status_name: application.status_name || "",
+      status_name: getApplicationStatus(application),
     })
   }
 
   const columns: ColumnDef<Application>[] = [
     {
       header: "Applicant",
+      sortKey: "worker_name",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
@@ -141,6 +194,8 @@ export default function ApplicationsPage() {
     },
     {
       header: "Position Details",
+      sortKey: "job_title",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium text-foreground">{item.job_title || "Unknown Position"}</div>
@@ -150,25 +205,33 @@ export default function ApplicationsPage() {
     },
     {
       header: "Timestamps",
-      cell: (item) => (
+      sortKey: "applied_at",
+      sortable: true,
+      cell: (item) => {
+        const appliedAt = getApplicationDate(item)
+        return (
         <div className="text-xs text-muted-foreground flex flex-col gap-1">
-          <div>Created: {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</div>
+          <div>Applied: {appliedAt ? new Date(appliedAt).toLocaleDateString() : 'N/A'}</div>
           {item.updated_at && <div>Updated: {new Date(item.updated_at).toLocaleDateString()}</div>}
         </div>
-      )
+        )
+      }
     },
     {
       header: "Status",
+      sortKey: "status",
+      sortable: true,
       cell: (item) => {
+        const status = getApplicationStatus(item)
         let variant: "default" | "destructive" | "secondary" | "outline" = "default"
         let className = ""
         
-        if (item.status_name === "ACCEPTED") {
+        if (status === "ACCEPTED") {
           className = "bg-success/10 text-success hover:bg-success/20 border-transparent"
-        } else if (item.status_name === "REJECTED") {
+        } else if (status === "REJECTED") {
           className = "bg-danger/10 text-danger hover:bg-danger/20 border-transparent"
           variant = "destructive"
-        } else if (item.status_name === "WITHDRAWN") {
+        } else if (status === "WITHDRAWN") {
           className = "bg-muted text-muted-foreground hover:bg-muted/80 border-transparent"
           variant = "secondary"
         } else {
@@ -178,7 +241,7 @@ export default function ApplicationsPage() {
 
         return (
           <Badge variant={variant} className={className}>
-            {item.status_name || "PENDING"}
+            {status}
           </Badge>
         )
       },
@@ -226,14 +289,31 @@ export default function ApplicationsPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={applications} 
+            data={tableControls.processedData} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
               setSearchQuery(q)
+              tableControls.setSearchQuery(q)
               setPage(1)
             }}
             searchPlaceholder="Search by applicant, job title, or company..."
+            searchFields={applicationSearchFields}
+            selectedSearchFields={tableControls.selectedSearchFields}
+            onToggleSearchField={tableControls.toggleSearchField}
+            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            filters={applicationFilters}
+            filterValues={tableControls.filterValues}
+            onFilterChange={tableControls.setFilterValue}
+            sortBy={tableControls.sortBy}
+            sortOrder={tableControls.sortOrder}
+            onSortChange={tableControls.toggleSort}
+            onResetControls={() => {
+              setSearchQuery("")
+              setPage(1)
+              tableControls.resetControls()
+            }}
+            hasActiveControls={tableControls.hasActiveControls}
             pagination={{
               page,
               pageSize,
