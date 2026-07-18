@@ -159,6 +159,8 @@ export default function WorkerDetailPage() {
   const workExpColumns: ColumnDef<any>[] = [
     {
       header: "Position",
+      sortKey: "job_title",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium">{item.job_title}</div>
@@ -168,6 +170,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Period",
+      sortKey: "start_date",
+      sortable: true,
       cell: (item) => (
         <span className="text-sm">
           {item.start_date ? new Date(item.start_date).toLocaleDateString() : "?"} —{" "}
@@ -180,6 +184,8 @@ export default function WorkerDetailPage() {
   const educationColumns: ColumnDef<any>[] = [
     {
       header: "Institution",
+      sortKey: "institution_name",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium">{item.institution_name}</div>
@@ -191,6 +197,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Period",
+      sortKey: "start_date",
+      sortable: true,
       cell: (item) => (
         <span className="text-sm">
           {item.start_date ? new Date(item.start_date).toLocaleDateString() : "?"} —{" "}
@@ -203,6 +211,8 @@ export default function WorkerDetailPage() {
   const certificationColumns: ColumnDef<any>[] = [
     {
       header: "Certification",
+      sortKey: "name",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium">{item.name}</div>
@@ -212,6 +222,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Validity",
+      sortKey: "issue_date",
+      sortable: true,
       cell: (item) => (
         <span className="text-sm">
           {item.issue_date ? new Date(item.issue_date).toLocaleDateString() : "?"}
@@ -224,6 +236,8 @@ export default function WorkerDetailPage() {
   const portfolioColumns: ColumnDef<any>[] = [
     {
       header: "Title",
+      sortKey: "title",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium">{item.title}</div>
@@ -237,6 +251,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Visibility",
+      sortKey: "is_public",
+      sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background">
           {item.is_public ? "Public" : "Private"}
@@ -248,6 +264,8 @@ export default function WorkerDetailPage() {
   const resumeColumns: ColumnDef<any>[] = [
     {
       header: "Resume",
+      sortKey: "title",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium">{item.title || "Untitled"}</div>
@@ -261,6 +279,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Default",
+      sortKey: "is_default",
+      sortable: true,
       cell: (item) =>
         item.is_default ? (
           <Badge className="bg-success/10 text-success border-transparent">Default</Badge>
@@ -273,10 +293,14 @@ export default function WorkerDetailPage() {
   const languageColumns: ColumnDef<any>[] = [
     {
       header: "Language",
+      sortKey: "language_name",
+      sortable: true,
       cell: (item) => <span className="font-medium">{item.language_name}</span>,
     },
     {
       header: "Proficiency",
+      sortKey: "proficiency",
+      sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background">
           {item.proficiency_level_name ||
@@ -287,6 +311,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Primary",
+      sortKey: "is_primary",
+      sortable: true,
       cell: (item) =>
         item.is_primary ? (
           <Badge className="bg-success/10 text-success border-transparent">Primary</Badge>
@@ -299,6 +325,8 @@ export default function WorkerDetailPage() {
   const skillColumns: ColumnDef<any>[] = [
     {
       header: "Skill",
+      sortKey: "skill_name",
+      sortable: true,
       cell: (item) => <span className="font-medium">{item.skill_name || item.name}</span>,
     },
   ]
@@ -306,6 +334,8 @@ export default function WorkerDetailPage() {
   const applicationColumns: ColumnDef<any>[] = [
     {
       header: "Job",
+      sortKey: "job_title",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium">{item.job_title || item.job_post_id}</div>
@@ -315,6 +345,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Status",
+      sortKey: "status_name",
+      sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background">
           {item.status_name ||
@@ -325,6 +357,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Applied",
+      sortKey: "created_at",
+      sortable: true,
       cell: (item) => (
         <span className="text-xs text-muted-foreground">
           {item.created_at ? new Date(item.created_at).toLocaleDateString() : "N/A"}
@@ -336,6 +370,8 @@ export default function WorkerDetailPage() {
   const answerColumns: ColumnDef<any>[] = [
     {
       header: "Question",
+      sortKey: "question",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium text-sm">{item.question || item.question_id}</div>
@@ -345,6 +381,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Answer",
+      sortKey: "answer",
+      sortable: true,
       cell: (item) => (
         <span className="text-sm line-clamp-2 max-w-[300px] block">
           {typeof item.answer === "object" ? JSON.stringify(item.answer) : item.answer}
@@ -356,6 +394,8 @@ export default function WorkerDetailPage() {
   const savedJobColumns: ColumnDef<any>[] = [
     {
       header: "Job",
+      sortKey: "job_title",
+      sortable: true,
       cell: (item) => (
         <div>
           <div className="font-medium">{item.job_title || item.title || item.job_post_id}</div>
@@ -365,6 +405,8 @@ export default function WorkerDetailPage() {
     },
     {
       header: "Saved At",
+      sortKey: "created_at",
+      sortable: true,
       cell: (item) => (
         <span className="text-xs text-muted-foreground">
           {item.created_at ? new Date(item.created_at).toLocaleDateString() : "N/A"}
@@ -517,6 +559,20 @@ export default function WorkerDetailPage() {
             queryKey={["worker-work-experiences", id]}
             columns={workExpColumns}
             getItemLabel={(item) => `${item.job_title} at ${item.company_name}`}
+            searchFields={[
+              { key: "company_name", label: "Company", getValue: (item) => item.company_name },
+              { key: "job_title", label: "Job Title", getValue: (item) => item.job_title },
+              { key: "description", label: "Description", getValue: (item) => item.description },
+              { key: "start_date", label: "Start Date", getValue: (item) => item.start_date },
+              { key: "end_date", label: "End Date", getValue: (item) => item.end_date },
+            ]}
+            filters={[{
+              key: "is_current",
+              label: "Current",
+              options: [{ value: "true", label: "Current" }, { value: "false", label: "Past" }],
+              getValue: (item) => item.is_current,
+            }]}
+            defaultSortBy="start_date"
             fields={[
               { name: "company_name", label: "Company Name", type: "text", required: true },
               { name: "job_title", label: "Job Title", type: "text", required: true },
@@ -533,6 +589,20 @@ export default function WorkerDetailPage() {
             queryKey={["worker-educations", id]}
             columns={educationColumns}
             getItemLabel={(item) => item.institution_name}
+            searchFields={[
+              { key: "institution_name", label: "Institution", getValue: (item) => item.institution_name },
+              { key: "degree", label: "Degree", getValue: (item) => item.degree },
+              { key: "major", label: "Major", getValue: (item) => item.major },
+              { key: "description", label: "Description", getValue: (item) => item.description },
+              { key: "start_date", label: "Start Date", getValue: (item) => item.start_date },
+              { key: "end_date", label: "End Date", getValue: (item) => item.end_date },
+            ]}
+            filters={[{
+              key: "is_current",
+              label: "Current",
+              options: [{ value: "true", label: "Current" }, { value: "false", label: "Completed" }],
+              getValue: (item) => item.is_current,
+            }]}
             fields={[
               { name: "institution_name", label: "Institution Name", type: "text", required: true },
               { name: "degree", label: "Degree", type: "text", placeholder: "e.g. Bachelor" },
@@ -550,6 +620,20 @@ export default function WorkerDetailPage() {
             queryKey={["worker-certifications", id]}
             columns={certificationColumns}
             getItemLabel={(item) => item.name}
+            searchFields={[
+              { key: "name", label: "Name", getValue: (item) => item.name },
+              { key: "issuer", label: "Issuer", getValue: (item) => item.issuer },
+              { key: "credential_id", label: "Credential ID", getValue: (item) => item.credential_id },
+              { key: "link", label: "Link", getValue: (item) => item.link },
+              { key: "issue_date", label: "Issue Date", getValue: (item) => item.issue_date },
+              { key: "expiry_date", label: "Expiry Date", getValue: (item) => item.expiry_date },
+            ]}
+            filters={[{
+              key: "is_active",
+              label: "Active",
+              options: [{ value: "true", label: "Active" }, { value: "false", label: "Inactive" }],
+              getValue: (item) => item.is_active,
+            }]}
             fields={[
               { name: "name", label: "Certification Name", type: "text", required: true },
               { name: "issuer", label: "Issuer", type: "text", required: true },
@@ -571,6 +655,17 @@ export default function WorkerDetailPage() {
             queryKey={["worker-portfolios", id]}
             columns={portfolioColumns}
             getItemLabel={(item) => item.title}
+            searchFields={[
+              { key: "title", label: "Title", getValue: (item) => item.title },
+              { key: "link", label: "Link", getValue: (item) => item.link },
+              { key: "description", label: "Description", getValue: (item) => item.description },
+            ]}
+            filters={[{
+              key: "is_public",
+              label: "Visibility",
+              options: [{ value: "true", label: "Public" }, { value: "false", label: "Private" }],
+              getValue: (item) => item.is_public,
+            }]}
             fields={[
               { name: "title", label: "Title", type: "text", required: true },
               { name: "link", label: "Link", type: "text", required: true },
@@ -585,6 +680,15 @@ export default function WorkerDetailPage() {
             queryKey={["worker-resumes", id]}
             columns={resumeColumns}
             getItemLabel={(item) => item.title || "resume"}
+            searchFields={[
+              { key: "title", label: "Title", getValue: (item) => item.title },
+            ]}
+            filters={[{
+              key: "is_default",
+              label: "Default",
+              options: [{ value: "true", label: "Default" }, { value: "false", label: "Other" }],
+              getValue: (item) => item.is_default,
+            }]}
             canCreate={false}
             fields={[
               { name: "title", label: "Title", type: "text", required: true },
@@ -603,6 +707,9 @@ export default function WorkerDetailPage() {
             columns={skillColumns}
             getItemLabel={(item) => item.skill_name || item.name || "skill"}
             getItemId={(item) => item.skill_id || item.id}
+            searchFields={[
+              { key: "skill_name", label: "Skill", getValue: (item) => item.skill_name || item.name },
+            ]}
             canEdit={false}
             fields={[
               {
@@ -625,6 +732,19 @@ export default function WorkerDetailPage() {
             queryKey={["worker-languages", id]}
             columns={languageColumns}
             getItemLabel={(item) => item.language_name}
+            searchFields={[
+              { key: "language_name", label: "Language", getValue: (item) => item.language_name },
+              { key: "proficiency", label: "Proficiency", getValue: (item) =>
+                item.proficiency_level_name ||
+                getLookupDisplayName(proficiencyLevels?.find((p: any) => p.id === item.proficiency_level_id))
+              },
+            ]}
+            filters={[{
+              key: "is_primary",
+              label: "Primary",
+              options: [{ value: "true", label: "Primary" }, { value: "false", label: "Other" }],
+              getValue: (item) => item.is_primary,
+            }]}
             fields={[
               { name: "language_name", label: "Language Name", type: "text", required: true },
               {
@@ -648,6 +768,13 @@ export default function WorkerDetailPage() {
             queryKey={["worker-applications", id]}
             columns={applicationColumns}
             getItemLabel={(item) => item.job_title || "application"}
+            searchFields={[
+              { key: "job_title", label: "Job", getValue: (item) => item.job_title },
+              { key: "company_name", label: "Company", getValue: (item) => item.company_name },
+              { key: "status_name", label: "Status", getValue: (item) => item.status_name },
+              { key: "cover_letter", label: "Cover Letter", getValue: (item) => item.cover_letter },
+              { key: "created_at", label: "Applied Date", getValue: (item) => item.created_at },
+            ]}
             canCreate={false}
             fields={[
               {
@@ -667,6 +794,11 @@ export default function WorkerDetailPage() {
             queryKey={["worker-answers", id]}
             columns={answerColumns}
             getItemLabel={(item) => item.question || "answer"}
+            searchFields={[
+              { key: "question", label: "Question", getValue: (item) => item.question },
+              { key: "job_title", label: "Job", getValue: (item) => item.job_title },
+              { key: "answer", label: "Answer", getValue: (item) => item.answer },
+            ]}
             canCreate={false}
             fields={[{ name: "answer", label: "Answer", type: "textarea", required: true }]}
             fromItem={(item) => ({
@@ -680,6 +812,11 @@ export default function WorkerDetailPage() {
             queryKey={["worker-saved-jobs", id]}
             columns={savedJobColumns}
             getItemLabel={(item) => item.job_title || item.title || "saved job"}
+            searchFields={[
+              { key: "job_title", label: "Job", getValue: (item) => item.job_title || item.title },
+              { key: "company_name", label: "Company", getValue: (item) => item.company_name },
+              { key: "created_at", label: "Saved Date", getValue: (item) => item.created_at },
+            ]}
             canCreate={false}
             canEdit={false}
             fields={[]}
