@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,8 @@ import type { ColumnDef } from "@/components/ui/data-table"
 import { MessageSquare, Eye, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { useTableControls } from "@/hooks/use-table-controls"
+import type { SearchFieldDef } from "@/lib/table-controls"
 import {
   Dialog,
   DialogContent,
@@ -73,6 +75,31 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
     },
   })
 
+  const searchFields = useMemo<SearchFieldDef[]>(
+    () => [
+      {
+        key: "counterpart",
+        label: perspective === "worker" ? "Company" : "Worker",
+        getValue: (item) =>
+          perspective === "worker"
+            ? item.company_name || item.recruiter_id
+            : item.worker_name || item.worker_id,
+      },
+      { key: "job_title", label: "Job Title", getValue: (item) => item.job_title },
+      { key: "last_message", label: "Last Message", getValue: (item) => item.last_message },
+      { key: "updated_at", label: "Updated", getValue: (item) => item.updated_at },
+    ],
+    [perspective]
+  )
+
+  const tableControls = useTableControls({
+    data: conversations,
+    searchFields,
+    sortFields: searchFields.map((field) => ({ key: field.key, getValue: field.getValue })),
+    defaultSortBy: "updated_at",
+    defaultSortOrder: "desc",
+  })
+
   const { data: messages = [], isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ["admin-conversation-messages", viewingConversation?.id],
     queryFn: async () => {
@@ -100,6 +127,8 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
   const columns: ColumnDef<Conversation>[] = [
     {
       header: perspective === "worker" ? "Company" : "Worker",
+      sortKey: "counterpart",
+      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-md bg-secondary/10 flex items-center justify-center text-secondary">
@@ -120,6 +149,8 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
     },
     {
       header: "Last Message",
+      sortKey: "last_message",
+      sortable: true,
       cell: (item) => (
         <span className="text-sm text-muted-foreground line-clamp-1 max-w-[300px] block">
           {item.last_message || "—"}
@@ -128,6 +159,8 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
     },
     {
       header: "Updated",
+      sortKey: "updated_at",
+      sortable: true,
       cell: (item) => (
         <span className="text-xs text-muted-foreground">
           {item.updated_at ? new Date(item.updated_at).toLocaleString() : "N/A"}
@@ -164,7 +197,23 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
               : "Failed to load conversations."}
           </div>
         ) : (
-          <DataTable columns={columns} data={conversations} isLoading={isLoading} />
+          <DataTable
+            columns={columns}
+            data={tableControls.processedData}
+            isLoading={isLoading}
+            searchQuery={tableControls.searchQuery}
+            onSearchChange={tableControls.setSearchQuery}
+            searchPlaceholder="Search company/worker, job title, or last message..."
+            searchFields={searchFields}
+            selectedSearchFields={tableControls.selectedSearchFields}
+            onToggleSearchField={tableControls.toggleSearchField}
+            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            sortBy={tableControls.sortBy}
+            sortOrder={tableControls.sortOrder}
+            onSortChange={tableControls.toggleSort}
+            onResetControls={tableControls.resetControls}
+            hasActiveControls={tableControls.hasActiveControls}
+          />
         )}
       </CardContent>
 
