@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -8,6 +8,7 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
+import { buildListQueryParams } from "@/lib/list-query"
 
 import {
   Dialog,
@@ -32,7 +33,8 @@ import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { Edit2, Trash2 } from "lucide-react"
 import { useTableControls } from "@/hooks/use-table-controls"
-import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
+import { toLookupOptions, useLookup } from "@/hooks/use-lookup"
+import type { FilterDef, SortFieldDef } from "@/lib/table-controls"
 
 interface Application {
   id: string
@@ -42,6 +44,7 @@ interface Application {
   /** Backend list currently returns `status`; some endpoints may return `status_name`. */
   status?: string
   status_name?: string
+  application_status_id?: number
   /** Backend list returns `applied_at`; UI also accepts `created_at`. */
   applied_at?: string
   created_at?: string
@@ -67,29 +70,14 @@ interface PaginatedResponse {
   }
 }
 
-const applicationSearchFields: SearchFieldDef[] = [
-  { key: "worker_name", label: "Applicant", getValue: (item: Application) => item.worker_name },
-  { key: "job_title", label: "Job", getValue: (item: Application) => item.job_title },
-  { key: "company_name", label: "Company", getValue: (item: Application) => item.company_name },
-  { key: "status", label: "Status", getValue: (item: Application) => getApplicationStatus(item) },
-]
-
-const applicationFilters: FilterDef[] = [{
-  key: "status",
-  label: "Status",
-  options: ["PENDING", "ACCEPTED", "REJECTED", "WITHDRAWN"].map((value) => ({
-    value,
-    label: value,
-  })),
-  getValue: (item: Application) => getApplicationStatus(item),
-}]
-
 const applicationSortFields: SortFieldDef[] = [
-  { key: "worker_name", getValue: (item: Application) => item.worker_name },
   { key: "job_title", getValue: (item: Application) => item.job_title },
   { key: "applied_at", getValue: (item: Application) => getApplicationDate(item) },
-  { key: "status", getValue: (item: Application) => getApplicationStatus(item) },
+  { key: "updated_at", getValue: (item: Application) => item.updated_at },
 ]
+
+const APPLICATION_SORT_KEYS = ["applied_at", "updated_at", "job_title"]
+const APPLICATION_FILTER_KEYS = ["application_status_id"]
 
 export default function ApplicationsPage() {
   const queryClient = useQueryClient()
@@ -105,16 +93,43 @@ export default function ApplicationsPage() {
     status_name: "",
   })
 
+  const { data: applicationStatuses } = useLookup("application_statuses")
+  const applicationFilters = useMemo<FilterDef[]>(
+    () => [{
+      key: "application_status_id",
+      label: "Status",
+      options: toLookupOptions(applicationStatuses),
+      getValue: (item: Application) => item.application_status_id,
+    }],
+    [applicationStatuses]
+  )
+
+  const tableControls = useTableControls({
+    data: [],
+    filters: applicationFilters,
+    sortFields: applicationSortFields,
+    defaultSortBy: "applied_at",
+    defaultSortOrder: "desc",
+    clientSide: false,
+  })
+
+  const listParams = buildListQueryParams({
+    page,
+    limit: pageSize,
+    search: debouncedSearch,
+    sortBy: tableControls.sortBy,
+    sortOrder: tableControls.sortOrder,
+    defaultSortBy: "applied_at",
+    defaultSortOrder: "desc",
+    filterValues: tableControls.filterValues,
+    allowedFilters: APPLICATION_FILTER_KEYS,
+    allowedSortBy: APPLICATION_SORT_KEYS,
+  })
+
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
-    queryKey: ["applications", page, pageSize, debouncedSearch],
+    queryKey: ["applications", listParams],
     queryFn: async () => {
-      const res = await apiClient.get("/admin/applications", {
-        params: {
-          page,
-          limit: pageSize,
-          search: debouncedSearch
-        }
-      })
+      const res = await apiClient.get("/admin/applications", { params: listParams })
       const rows = (res.data?.data || []).map((application: Application) => ({
         ...application,
         status_name: getApplicationStatus(application),
@@ -128,12 +143,6 @@ export default function ApplicationsPage() {
 
   const applications = response?.data || []
   const totalApplications = getTotalFromMeta(response?.meta)
-  const tableControls = useTableControls({
-    data: applications,
-    searchFields: applicationSearchFields,
-    filters: applicationFilters,
-    sortFields: applicationSortFields,
-  })
 
   const saveMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -174,8 +183,6 @@ export default function ApplicationsPage() {
   const columns: ColumnDef<Application>[] = [
     {
       header: "Applicant",
-      sortKey: "worker_name",
-      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
@@ -219,8 +226,6 @@ export default function ApplicationsPage() {
     },
     {
       header: "Status",
-      sortKey: "status",
-      sortable: true,
       cell: (item) => {
         const status = getApplicationStatus(item)
         let variant: "default" | "destructive" | "secondary" | "outline" = "default"
@@ -289,7 +294,7 @@ export default function ApplicationsPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={tableControls.processedData} 
+            data={applications}
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
@@ -298,16 +303,19 @@ export default function ApplicationsPage() {
               setPage(1)
             }}
             searchPlaceholder="Search by applicant, job title, or company..."
-            searchFields={applicationSearchFields}
-            selectedSearchFields={tableControls.selectedSearchFields}
-            onToggleSearchField={tableControls.toggleSearchField}
-            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            hideSearchFields
             filters={applicationFilters}
             filterValues={tableControls.filterValues}
-            onFilterChange={tableControls.setFilterValue}
+            onFilterChange={(key, value) => {
+              tableControls.setFilterValue(key, value)
+              setPage(1)
+            }}
             sortBy={tableControls.sortBy}
             sortOrder={tableControls.sortOrder}
-            onSortChange={tableControls.toggleSort}
+            onSortChange={(key) => {
+              tableControls.toggleSort(key)
+              setPage(1)
+            }}
             onResetControls={() => {
               setSearchQuery("")
               setPage(1)

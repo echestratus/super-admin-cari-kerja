@@ -9,6 +9,7 @@ import type { ColumnDef } from "@/components/ui/data-table"
 import { ShieldBan, CheckCircle2, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
+import { buildListQueryParams } from "@/lib/list-query"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -32,7 +33,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTableControls } from "@/hooks/use-table-controls"
-import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
+import type { FilterDef, SortFieldDef } from "@/lib/table-controls"
 
 interface User {
   id: string
@@ -58,12 +59,8 @@ interface PaginatedResponse {
 const getRoleLabel = (roleId: number) =>
   roleId === 3 ? "Super Admin" : roleId === 2 ? "Recruiter" : roleId === 4 ? "Admin" : "Job Seeker"
 
-const userSearchFields: SearchFieldDef[] = [
-  { key: "username", label: "Username", getValue: (item: User) => item.username },
-  { key: "email", label: "Email", getValue: (item: User) => item.email },
-  { key: "role", label: "Role", getValue: (item: User) => getRoleLabel(item.role_id) },
-  { key: "status", label: "Status", getValue: (item: User) => item.is_suspended ? "Suspended" : "Active" },
-]
+const ENCRYPTED_SEARCH_HINT =
+  "Gunakan email/nama lengkap untuk hasil akurat (kolom sensitif terenkripsi)."
 
 const userFilters: FilterDef[] = [
   {
@@ -83,14 +80,27 @@ const userFilters: FilterDef[] = [
     options: [{ value: "false", label: "Active" }, { value: "true", label: "Suspended" }],
     getValue: (item: User) => item.is_suspended,
   },
+  {
+    key: "deleted_state",
+    label: "Record",
+    options: [
+      { value: "active", label: "Active only" },
+      { value: "deleted", label: "Deleted only" },
+      { value: "all", label: "All" },
+    ],
+    getValue: (item: User) => (item.deleted_at ? "deleted" : "active"),
+  },
 ]
 
 const userSortFields: SortFieldDef[] = [
-  { key: "username", getValue: (item: User) => item.username },
-  { key: "role", getValue: (item: User) => getRoleLabel(item.role_id) },
-  { key: "status", getValue: (item: User) => item.is_suspended },
+  { key: "role_id", getValue: (item: User) => item.role_id },
+  { key: "is_suspended", getValue: (item: User) => item.is_suspended },
   { key: "created_at", getValue: (item: User) => item.created_at },
+  { key: "updated_at", getValue: (item: User) => item.updated_at },
 ]
+
+const USER_SORT_KEYS = ["created_at", "updated_at", "role_id", "is_suspended"]
+const USER_FILTER_KEYS = ["role_id", "is_suspended", "deleted_state"]
 
 export default function UsersPage() {
   const queryClient = useQueryClient()
@@ -111,28 +121,38 @@ export default function UsersPage() {
     is_suspended: false,
   })
 
+  const tableControls = useTableControls({
+    data: [],
+    filters: userFilters,
+    sortFields: userSortFields,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    clientSide: false,
+  })
+
+  const listParams = buildListQueryParams({
+    page,
+    limit: pageSize,
+    search: debouncedSearch,
+    sortBy: tableControls.sortBy,
+    sortOrder: tableControls.sortOrder,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    filterValues: tableControls.filterValues,
+    allowedFilters: USER_FILTER_KEYS,
+    allowedSortBy: USER_SORT_KEYS,
+  })
+
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
-    queryKey: ["users", page, pageSize, debouncedSearch],
+    queryKey: ["users", listParams],
     queryFn: async () => {
-      const res = await apiClient.get("/admin/users", {
-        params: {
-          page,
-          limit: pageSize,
-          search: debouncedSearch
-        }
-      })
+      const res = await apiClient.get("/admin/users", { params: listParams })
       return res.data
     },
   })
 
   const users = response?.data || []
   const totalUsers = getTotalFromMeta(response?.meta)
-  const tableControls = useTableControls({
-    data: users,
-    searchFields: userSearchFields,
-    filters: userFilters,
-    sortFields: userSortFields,
-  })
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, is_suspended }: { id: string, is_suspended: boolean }) => {
@@ -196,8 +216,6 @@ export default function UsersPage() {
   const columns: ColumnDef<User>[] = [
     {
       header: "User Details",
-      sortKey: "username",
-      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
@@ -212,7 +230,7 @@ export default function UsersPage() {
     },
     {
       header: "Role",
-      sortKey: "role",
+      sortKey: "role_id",
       sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background">
@@ -222,7 +240,7 @@ export default function UsersPage() {
     },
     {
       header: "Status",
-      sortKey: "status",
+      sortKey: "is_suspended",
       sortable: true,
       cell: (item) => (
         <div className="flex gap-2">
@@ -302,7 +320,7 @@ export default function UsersPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={tableControls.processedData} 
+            data={users} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
@@ -310,23 +328,29 @@ export default function UsersPage() {
               tableControls.setSearchQuery(q)
               setPage(1)
             }}
-            searchPlaceholder="Search by name or email..."
-            searchFields={userSearchFields}
-            selectedSearchFields={tableControls.selectedSearchFields}
-            onToggleSearchField={tableControls.toggleSearchField}
-            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            searchPlaceholder="Search by username or email..."
+            searchHint={ENCRYPTED_SEARCH_HINT}
+            hideSearchFields
             filters={userFilters}
             filterValues={tableControls.filterValues}
-            onFilterChange={tableControls.setFilterValue}
+            onFilterChange={(key, value) => {
+              tableControls.setFilterValue(key, value)
+              setPage(1)
+            }}
             sortBy={tableControls.sortBy}
             sortOrder={tableControls.sortOrder}
-            onSortChange={tableControls.toggleSort}
+            onSortChange={(key) => {
+              tableControls.toggleSort(key)
+              setPage(1)
+            }}
             onResetControls={() => {
               setSearchQuery("")
               setPage(1)
               tableControls.resetControls()
             }}
-            hasActiveControls={tableControls.hasActiveControls}
+            hasActiveControls={
+              tableControls.hasActiveControls || searchQuery.trim().length > 0
+            }
             pagination={{
               page,
               pageSize,

@@ -9,6 +9,7 @@ import type { ColumnDef } from "@/components/ui/data-table"
 import { Briefcase, CheckCircle2, XCircle, Archive, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
+import { buildListQueryParams } from "@/lib/list-query"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -31,7 +32,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { useTableControls } from "@/hooks/use-table-controls"
-import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
+import type { FilterDef, SortFieldDef } from "@/lib/table-controls"
 
 interface Job {
   id: string
@@ -61,30 +62,24 @@ interface PaginatedResponse {
   }
 }
 
-const jobSearchFields: SearchFieldDef[] = [
-  { key: "title", label: "Title", getValue: (item: Job) => item.title },
-  { key: "company_name", label: "Company", getValue: (item: Job) => item.company_name },
-  { key: "status", label: "Status", getValue: (item: Job) => getJobStatus(item) },
-  { key: "description", label: "Description", getValue: (item: Job) => item.description },
-  { key: "salary", label: "Salary", getValue: (item: Job) => item.salary },
-]
-
 const jobFilters: FilterDef[] = [{
   key: "status",
   label: "Status",
-  options: ["PENDING", "DRAFT", "OPEN", "APPROVED", "ACTIVE", "CLOSED", "REJECTED", "ARCHIVED"].map((value) => ({
+  options: ["pending", "draft", "open", "approved", "active", "closed", "rejected", "archived"].map((value) => ({
     value,
-    label: value,
+    label: value.toUpperCase(),
   })),
-  getValue: (item: Job) => getJobStatus(item),
+  getValue: (item: Job) => getJobStatus(item).toLowerCase(),
 }]
 
 const jobSortFields: SortFieldDef[] = [
   { key: "title", getValue: (item: Job) => item.title },
-  { key: "company_name", getValue: (item: Job) => item.company_name },
   { key: "created_at", getValue: (item: Job) => item.created_at },
-  { key: "status", getValue: (item: Job) => getJobStatus(item) },
+  { key: "updated_at", getValue: (item: Job) => item.updated_at },
 ]
+
+const JOB_SORT_KEYS = ["created_at", "updated_at", "title"]
+const JOB_FILTER_KEYS = ["status"]
 
 export default function JobsPage() {
   const queryClient = useQueryClient()
@@ -103,16 +98,32 @@ export default function JobsPage() {
     description: "",
   })
 
+  const tableControls = useTableControls({
+    data: [],
+    filters: jobFilters,
+    sortFields: jobSortFields,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    clientSide: false,
+  })
+
+  const listParams = buildListQueryParams({
+    page,
+    limit: pageSize,
+    search: debouncedSearch,
+    sortBy: tableControls.sortBy,
+    sortOrder: tableControls.sortOrder,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    filterValues: tableControls.filterValues,
+    allowedFilters: JOB_FILTER_KEYS,
+    allowedSortBy: JOB_SORT_KEYS,
+  })
+
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
-    queryKey: ["jobs", page, pageSize, debouncedSearch],
+    queryKey: ["jobs", listParams],
     queryFn: async () => {
-      const res = await apiClient.get("/admin/jobs", {
-        params: {
-          page,
-          limit: pageSize,
-          search: debouncedSearch
-        }
-      })
+      const res = await apiClient.get("/admin/jobs", { params: listParams })
       const rows = (res.data?.data || []).map((job: Job) => ({
         ...job,
         status_name: getJobStatus(job),
@@ -124,12 +135,6 @@ export default function JobsPage() {
 
   const jobs = response?.data || []
   const totalJobs = getTotalFromMeta(response?.meta)
-  const tableControls = useTableControls({
-    data: jobs,
-    searchFields: jobSearchFields,
-    filters: jobFilters,
-    sortFields: jobSortFields,
-  })
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string, status: string }) => {
@@ -221,8 +226,6 @@ export default function JobsPage() {
     },
     {
       header: "Status",
-      sortKey: "status",
-      sortable: true,
       cell: (item) => {
         const status = getJobStatus(item)
         let variant: "default" | "destructive" | "secondary" | "outline" = "default"
@@ -331,7 +334,7 @@ export default function JobsPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={tableControls.processedData} 
+            data={jobs} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
@@ -339,17 +342,20 @@ export default function JobsPage() {
               tableControls.setSearchQuery(q)
               setPage(1)
             }}
-            searchPlaceholder="Search by job title or company..."
-            searchFields={jobSearchFields}
-            selectedSearchFields={tableControls.selectedSearchFields}
-            onToggleSearchField={tableControls.toggleSearchField}
-            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            searchPlaceholder="Search by title, location, or company..."
+            hideSearchFields
             filters={jobFilters}
             filterValues={tableControls.filterValues}
-            onFilterChange={tableControls.setFilterValue}
+            onFilterChange={(key, value) => {
+              tableControls.setFilterValue(key, value)
+              setPage(1)
+            }}
             sortBy={tableControls.sortBy}
             sortOrder={tableControls.sortOrder}
-            onSortChange={tableControls.toggleSort}
+            onSortChange={(key) => {
+              tableControls.toggleSort(key)
+              setPage(1)
+            }}
             onResetControls={() => {
               setSearchQuery("")
               setPage(1)

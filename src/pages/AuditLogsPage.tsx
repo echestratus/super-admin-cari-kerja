@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
 import { getTotalFromMeta } from "@/lib/pagination"
+import { buildListQueryParams } from "@/lib/list-query"
 import { useDebounce } from "@/hooks/use-debounce"
 import { useTableControls } from "@/hooks/use-table-controls"
-import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
+import type { FilterDef, SortFieldDef } from "@/lib/table-controls"
 
 interface AuditLog {
   id: string
@@ -34,63 +36,69 @@ interface PaginatedResponse {
   }
 }
 
-const auditSearchFields: SearchFieldDef[] = [
-  { key: "action", label: "Action", getValue: (item: AuditLog) => item.action },
-  { key: "user", label: "User", getValue: (item: AuditLog) => item.username || item.user_email },
-  { key: "ip_address", label: "IP Address", getValue: (item: AuditLog) => item.ip_address },
-  { key: "user_agent", label: "User Agent", getValue: (item: AuditLog) => item.user_agent },
-  { key: "entity", label: "Entity", getValue: (item: AuditLog) => `${item.entity || ""} ${item.entity_id || ""}` },
-]
-
 const auditFilters: FilterDef[] = [{
-  key: "action_type",
-  label: "Action Type",
+  key: "action",
+  label: "Action",
   options: [
     { value: "create", label: "Create" },
     { value: "update", label: "Update" },
     { value: "delete", label: "Delete" },
   ],
-  getValue: (item: AuditLog) =>
-    ["create", "update", "delete"].find((type) => item.action.toLowerCase().includes(type)) || "other",
+  getValue: (item: AuditLog) => item.action,
 }]
 
 const auditSortFields: SortFieldDef[] = [
   { key: "created_at", getValue: (item: AuditLog) => item.created_at },
   { key: "action", getValue: (item: AuditLog) => item.action },
-  { key: "user", getValue: (item: AuditLog) => item.username || item.user_email },
-  { key: "ip_address", getValue: (item: AuditLog) => item.ip_address },
 ]
+
+const AUDIT_LOG_SORT_KEYS = ["created_at", "action"]
+const AUDIT_LOG_FILTER_KEYS = ["action"]
 
 export default function AuditLogsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
   const pageSize = 15
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+
+  const tableControls = useTableControls({
+    data: [],
+    filters: auditFilters,
+    sortFields: auditSortFields,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    clientSide: false,
+  })
+
+  const listParams = {
+    ...buildListQueryParams({
+      page,
+      limit: pageSize,
+      search: debouncedSearch,
+      sortBy: tableControls.sortBy,
+      sortOrder: tableControls.sortOrder,
+      defaultSortBy: "created_at",
+      defaultSortOrder: "desc",
+      filterValues: tableControls.filterValues,
+      allowedFilters: AUDIT_LOG_FILTER_KEYS,
+      allowedSortBy: AUDIT_LOG_SORT_KEYS,
+    }),
+    ...(dateFrom && { date_from: dateFrom }),
+    ...(dateTo && { date_to: dateTo }),
+  }
 
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
-    queryKey: ["audit-logs", page, pageSize, debouncedSearch],
+    queryKey: ["audit-logs", listParams],
     queryFn: async () => {
-      const res = await apiClient.get("/admin/audit-logs", {
-        params: {
-          page,
-          limit: pageSize,
-          search: debouncedSearch || undefined,
-        }
-      })
+      const res = await apiClient.get("/admin/audit-logs", { params: listParams })
       return res.data
     }
   })
 
   const logs = response?.data || []
   const totalLogs = getTotalFromMeta(response?.meta)
-  const tableControls = useTableControls({
-    data: logs,
-    searchFields: auditSearchFields,
-    filters: auditFilters,
-    sortFields: auditSortFields,
-    defaultSortBy: "created_at",
-    defaultSortOrder: "desc",
-  })
 
   const columns: ColumnDef<AuditLog>[] = [
     {
@@ -121,8 +129,6 @@ export default function AuditLogsPage() {
     },
     {
       header: "Performed By",
-      sortKey: "user",
-      sortable: true,
       cell: (item) => (
         <div className="flex flex-col">
           <span className="text-sm">{item.username || item.user_email || "Unknown user"}</span>
@@ -132,8 +138,6 @@ export default function AuditLogsPage() {
     },
     {
       header: "IP Address",
-      sortKey: "ip_address",
-      sortable: true,
       cell: (item) => (
         <span className="text-sm font-mono">{item.ip_address || "—"}</span>
       )
@@ -163,7 +167,7 @@ export default function AuditLogsPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={tableControls.processedData} 
+            data={logs}
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(query) => {
@@ -172,22 +176,51 @@ export default function AuditLogsPage() {
               setPage(1)
             }}
             searchPlaceholder="Search username, action, or IP address..."
-            searchFields={auditSearchFields}
-            selectedSearchFields={tableControls.selectedSearchFields}
-            onToggleSearchField={tableControls.toggleSearchField}
-            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            hideSearchFields
             filters={auditFilters}
             filterValues={tableControls.filterValues}
-            onFilterChange={tableControls.setFilterValue}
+            onFilterChange={(key, value) => {
+              tableControls.setFilterValue(key, value)
+              setPage(1)
+            }}
             sortBy={tableControls.sortBy}
             sortOrder={tableControls.sortOrder}
-            onSortChange={tableControls.toggleSort}
+            onSortChange={(key) => {
+              tableControls.toggleSort(key)
+              setPage(1)
+            }}
             onResetControls={() => {
               setSearchQuery("")
+              setDateFrom("")
+              setDateTo("")
               tableControls.resetControls()
               setPage(1)
             }}
-            hasActiveControls={!!searchQuery.trim() || tableControls.hasActiveControls}
+            hasActiveControls={!!searchQuery.trim() || !!dateFrom || !!dateTo || tableControls.hasActiveControls}
+            toolbarExtra={
+              <>
+                <Input
+                  type="date"
+                  aria-label="From date"
+                  className="h-9 w-[145px]"
+                  value={dateFrom}
+                  onChange={(event) => {
+                    setDateFrom(event.target.value)
+                    setPage(1)
+                  }}
+                />
+                <Input
+                  type="date"
+                  aria-label="To date"
+                  className="h-9 w-[145px]"
+                  value={dateTo}
+                  onChange={(event) => {
+                    setDateTo(event.target.value)
+                    setPage(1)
+                  }}
+                />
+              </>
+            }
             pagination={{
               page,
               pageSize,
