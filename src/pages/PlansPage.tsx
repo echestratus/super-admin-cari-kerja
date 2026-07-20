@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Edit2, Trash2, CreditCard, Zap, Package } from "lucide-react"
 import { toast } from "sonner"
 import { useTableControls } from "@/hooks/use-table-controls"
+import { useDebounce } from "@/hooks/use-debounce"
 import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 import {
   Dialog,
@@ -47,29 +48,6 @@ interface Plan {
   boost_priority?: number
 }
 
-function groupPlansByType(raw: unknown): Record<PlanType, Plan[]> {
-  const empty: Record<PlanType, Plan[]> = { subscription: [], single_post: [], boost: [] }
-
-  if (Array.isArray(raw)) {
-    for (const plan of raw as Plan[]) {
-      const type = plan.plan_type
-      if (type && empty[type]) empty[type].push(plan)
-    }
-    return empty
-  }
-
-  if (raw && typeof raw === "object") {
-    const grouped = raw as Partial<Record<PlanType, Plan[]>>
-    return {
-      subscription: grouped.subscription || [],
-      single_post: grouped.single_post || [],
-      boost: grouped.boost || [],
-    }
-  }
-
-  return empty
-}
-
 const PLAN_TABS: { id: PlanType; label: string; icon: typeof CreditCard; description: string }[] = [
   { id: "subscription", label: "Subscriptions", icon: CreditCard, description: "Recurring plans that allow recruiters to keep multiple job posts active." },
   { id: "single_post", label: "Single Posts", icon: Package, description: "One-time plans for a single job post slot (Regular or Hot)." },
@@ -93,21 +71,23 @@ const emptyForm = {
 export default function PlansPage() {
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<PlanType>("subscription")
+  const [searchQuery, setSearchQuery] = useState("")
+  const debouncedSearch = useDebounce(searchQuery, 500)
 
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null)
   const [deletingPlan, setDeletingPlan] = useState<Plan | null>(null)
   const [formData, setFormData] = useState({ ...emptyForm })
 
-  const { data: plansData, isLoading } = useQuery<Record<PlanType, Plan[]>>({
-    queryKey: ["plans"],
+  const { data: currentPlans = [], isLoading } = useQuery<Plan[]>({
+    queryKey: ["plans", activeTab, debouncedSearch],
     queryFn: async () => {
-      const res = await apiClient.get("/admin/plans")
-      return groupPlansByType(res.data?.data)
+      const res = await apiClient.get(`/admin/plans/${activeTab}`, {
+        params: { search: debouncedSearch.trim() || undefined },
+      })
+      return res.data?.data || []
     },
   })
-
-  const currentPlans = plansData?.[activeTab] || []
 
   const searchFields = useMemo<SearchFieldDef[]>(() => {
     const fields: SearchFieldDef[] = [
@@ -169,6 +149,7 @@ export default function PlansPage() {
   })
 
   useEffect(() => {
+    setSearchQuery("")
     tableControls.resetControls()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
@@ -386,8 +367,11 @@ export default function PlansPage() {
                   columns={buildColumns(tab.id)}
                   data={tableControls.processedData}
                   isLoading={isLoading}
-                  searchQuery={tableControls.searchQuery}
-                  onSearchChange={tableControls.setSearchQuery}
+                  searchQuery={searchQuery}
+                  onSearchChange={(query) => {
+                    setSearchQuery(query)
+                    tableControls.setSearchQuery(query)
+                  }}
                   searchPlaceholder="Search name, price, duration..."
                   searchFields={searchFields}
                   selectedSearchFields={tableControls.selectedSearchFields}
@@ -399,7 +383,10 @@ export default function PlansPage() {
                   sortBy={tableControls.sortBy}
                   sortOrder={tableControls.sortOrder}
                   onSortChange={tableControls.toggleSort}
-                  onResetControls={tableControls.resetControls}
+                  onResetControls={() => {
+                    setSearchQuery("")
+                    tableControls.resetControls()
+                  }}
                   hasActiveControls={tableControls.hasActiveControls}
                 />
               </CardContent>
