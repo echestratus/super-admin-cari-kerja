@@ -39,12 +39,16 @@ interface DataTableProps<T> {
   data: T[]
   isLoading?: boolean
   searchPlaceholder?: string
+  /** Optional hint shown under the search input (e.g. encrypted-field guidance). */
+  searchHint?: string
   searchQuery?: string
   onSearchChange?: (query: string) => void
   searchFields?: SearchFieldDef[]
   selectedSearchFields?: string[]
   onToggleSearchField?: (key: string) => void
   onSelectAllSearchFields?: () => void
+  /** Hide advanced field chips (useful for server-side search that always hits all columns). */
+  hideSearchFields?: boolean
   filters?: FilterDef[]
   filterValues?: Record<string, string>
   onFilterChange?: (key: string, value: string) => void
@@ -67,12 +71,14 @@ export function DataTable<T>({
   data,
   isLoading,
   searchPlaceholder = "Search across selected fields...",
+  searchHint,
   searchQuery,
   onSearchChange,
   searchFields,
   selectedSearchFields,
   onToggleSearchField,
   onSelectAllSearchFields,
+  hideSearchFields,
   filters,
   filterValues,
   onFilterChange,
@@ -90,21 +96,32 @@ export function DataTable<T>({
     !!toolbarExtra ||
     !!onResetControls
 
+  const showSearchFields =
+    !hideSearchFields &&
+    !!searchFields &&
+    searchFields.length > 0 &&
+    !!onToggleSearchField
+
   return (
     <div className="space-y-4">
       {showToolbar && (
         <div className="space-y-3 rounded-lg border bg-card/40 p-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             {onSearchChange && (
-              <div className="relative w-full max-w-xl">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder={searchPlaceholder}
-                  value={searchQuery || ""}
-                  onChange={(e) => onSearchChange(e.target.value)}
-                  className="w-full bg-background border rounded-md pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+              <div className="w-full max-w-xl space-y-1.5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder={searchPlaceholder}
+                    value={searchQuery || ""}
+                    onChange={(e) => onSearchChange(e.target.value)}
+                    className="w-full bg-background border rounded-md pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                {searchHint && (
+                  <p className="text-xs text-muted-foreground">{searchHint}</p>
+                )}
               </div>
             )}
 
@@ -119,7 +136,7 @@ export function DataTable<T>({
             </div>
           </div>
 
-          {searchFields && searchFields.length > 0 && onToggleSearchField && (
+          {showSearchFields && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <SlidersHorizontal className="h-3.5 w-3.5" />
@@ -135,13 +152,13 @@ export function DataTable<T>({
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                {searchFields.map((field) => {
+                {searchFields!.map((field) => {
                   const active = selectedSearchFields?.includes(field.key)
                   return (
                     <button
                       key={field.key}
                       type="button"
-                      onClick={() => onToggleSearchField(field.key)}
+                      onClick={() => onToggleSearchField!(field.key)}
                       className="focus:outline-none"
                     >
                       <Badge
