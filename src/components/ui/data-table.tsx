@@ -21,6 +21,7 @@ import {
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { getPaginationPages, getTotalPages } from "@/lib/pagination"
 import type { FilterDef, SearchFieldDef, SortOrder } from "@/lib/table-controls"
 
 export interface ColumnDef<T> {
@@ -101,6 +102,13 @@ export function DataTable<T>({
     !!searchFields &&
     searchFields.length > 0 &&
     !!onToggleSearchField
+
+  const totalPages = pagination
+    ? getTotalPages(pagination.total, pagination.pageSize)
+    : 0
+  const pageItems = pagination
+    ? getPaginationPages(pagination.page, totalPages)
+    : []
 
   return (
     <div className="space-y-4">
@@ -285,7 +293,7 @@ export function DataTable<T>({
       </div>
 
       {pagination && (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-muted-foreground">
             Showing{" "}
             <span className="font-medium">
@@ -297,7 +305,7 @@ export function DataTable<T>({
             </span>{" "}
             of <span className="font-medium">{pagination.total}</span> entries
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1">
             <Button
               variant="outline"
               size="sm"
@@ -307,11 +315,39 @@ export function DataTable<T>({
               <ChevronLeft className="h-4 w-4 mr-1" />
               Previous
             </Button>
+
+            {pageItems.map((item, index) =>
+              item === "ellipsis" ? (
+                <span
+                  key={`ellipsis-${index}`}
+                  className="px-1 text-sm text-muted-foreground select-none"
+                  aria-hidden
+                >
+                  …
+                </span>
+              ) : (
+                <Button
+                  key={item}
+                  variant={item === pagination.page ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "min-w-9 px-2",
+                    item === pagination.page && "pointer-events-none"
+                  )}
+                  onClick={() => pagination.onPageChange(item)}
+                  aria-label={`Page ${item}`}
+                  aria-current={item === pagination.page ? "page" : undefined}
+                >
+                  {item}
+                </Button>
+              )
+            )}
+
             <Button
               variant="outline"
               size="sm"
               onClick={() => pagination.onPageChange(pagination.page + 1)}
-              disabled={pagination.page * pagination.pageSize >= pagination.total}
+              disabled={pagination.page >= totalPages || totalPages === 0}
             >
               Next
               <ChevronRight className="h-4 w-4 ml-1" />
