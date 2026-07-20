@@ -115,7 +115,11 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
       return apiClient.delete(`/admin/conversations/${viewingConversation!.id}/messages/${id}`)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-conversation-messages", viewingConversation?.id] })
+      queryClient.invalidateQueries({
+        queryKey: ["admin-conversation-messages", viewingConversation?.id],
+      })
+      // Backend syncs conversations.last_message / last_message_at on delete.
+      queryClient.invalidateQueries({ queryKey })
       setDeletingMessage(null)
       toast.success("Message deleted successfully.")
     },
