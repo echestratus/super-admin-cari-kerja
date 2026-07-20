@@ -146,13 +146,13 @@ export default function EmployersPage() {
 
   const verifyMutation = useMutation({
     mutationFn: async ({ id, is_verified }: { id: string, is_verified: boolean }) => {
-      const action = is_verified ? "unverify" : "verify"
-      await apiClient.put(`/admin/employers/${id}/verify`, { action })
-      return action
+      const nextVerified = !is_verified
+      await apiClient.put(`/admin/employers/${id}/verify`, { is_verified: nextVerified })
+      return nextVerified
     },
-    onSuccess: (action) => {
+    onSuccess: (nextVerified) => {
       queryClient.invalidateQueries({ queryKey: ["employers"] })
-      toast.success(`Employer ${action === "verify" ? "verified" : "unverified"} successfully.`)
+      toast.success(`Employer ${nextVerified ? "verified" : "unverified"} successfully.`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to update verification status.")
