@@ -10,6 +10,7 @@ import type { ColumnDef } from "@/components/ui/data-table"
 import { User, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
+import { buildListQueryParams } from "@/lib/list-query"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -22,7 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useTableControls } from "@/hooks/use-table-controls"
-import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
+import type { FilterDef, SortFieldDef } from "@/lib/table-controls"
 
 interface Worker {
   id: string
@@ -49,17 +50,11 @@ interface PaginatedResponse {
   }
 }
 
+const ENCRYPTED_SEARCH_HINT =
+  "Gunakan email/nama lengkap untuk hasil akurat (kolom sensitif terenkripsi)."
+
 const getGenderLabel = (genderId?: number) =>
   genderId === 1 ? "Male" : genderId === 2 ? "Female" : "Not Specified"
-
-const workerSearchFields: SearchFieldDef[] = [
-  { key: "name", label: "Name", getValue: (item: Worker) => item.name },
-  { key: "telephone", label: "Telephone", getValue: (item: Worker) => item.telephone },
-  { key: "user_email", label: "Email", getValue: (item: Worker) => item.user_email },
-  { key: "user_username", label: "Username", getValue: (item: Worker) => item.user_username },
-  { key: "gender", label: "Gender", getValue: (item: Worker) => getGenderLabel(item.gender_id) },
-  { key: "address", label: "Address", getValue: (item: Worker) => item.address },
-]
 
 const workerFilters: FilterDef[] = [
   {
@@ -72,20 +67,25 @@ const workerFilters: FilterDef[] = [
     getValue: (item: Worker) => item.gender_id,
   },
   {
-    key: "deleted",
+    key: "deleted_state",
     label: "Record",
-    options: [{ value: "false", label: "Active" }, { value: "true", label: "Deleted" }],
-    getValue: (item: Worker) => Boolean(item.deleted_at),
+    options: [
+      { value: "active", label: "Active only" },
+      { value: "deleted", label: "Deleted only" },
+      { value: "all", label: "All" },
+    ],
+    getValue: (item: Worker) => (item.deleted_at ? "deleted" : "active"),
   },
 ]
 
 const workerSortFields: SortFieldDef[] = [
-  { key: "name", getValue: (item: Worker) => item.name },
-  { key: "user_email", getValue: (item: Worker) => item.user_email },
-  { key: "gender", getValue: (item: Worker) => getGenderLabel(item.gender_id) },
-  { key: "date_of_birth", getValue: (item: Worker) => item.date_of_birth },
+  { key: "gender_id", getValue: (item: Worker) => item.gender_id },
   { key: "created_at", getValue: (item: Worker) => item.created_at },
+  { key: "updated_at", getValue: (item: Worker) => item.updated_at },
 ]
+
+const WORKER_SORT_KEYS = ["created_at", "updated_at", "gender_id"]
+const WORKER_FILTER_KEYS = ["gender_id", "deleted_state"]
 
 export default function WorkersPage() {
   const queryClient = useQueryClient()
@@ -98,28 +98,38 @@ export default function WorkersPage() {
   const [deletingWorker, setDeletingWorker] = useState<Worker | null>(null)
   const [hardDelete, setHardDelete] = useState(false)
 
+  const tableControls = useTableControls({
+    data: [],
+    filters: workerFilters,
+    sortFields: workerSortFields,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    clientSide: false,
+  })
+
+  const listParams = buildListQueryParams({
+    page,
+    limit: pageSize,
+    search: debouncedSearch,
+    sortBy: tableControls.sortBy,
+    sortOrder: tableControls.sortOrder,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    filterValues: tableControls.filterValues,
+    allowedFilters: WORKER_FILTER_KEYS,
+    allowedSortBy: WORKER_SORT_KEYS,
+  })
+
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
-    queryKey: ["workers", page, pageSize, debouncedSearch],
+    queryKey: ["workers", listParams],
     queryFn: async () => {
-      const res = await apiClient.get("/admin/workers", {
-        params: {
-          page,
-          limit: pageSize,
-          search: debouncedSearch
-        }
-      })
+      const res = await apiClient.get("/admin/workers", { params: listParams })
       return res.data
     },
   })
 
   const workers = response?.data || []
   const totalWorkers = getTotalFromMeta(response?.meta)
-  const tableControls = useTableControls({
-    data: workers,
-    searchFields: workerSearchFields,
-    filters: workerFilters,
-    sortFields: workerSortFields,
-  })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -139,8 +149,6 @@ export default function WorkersPage() {
   const columns: ColumnDef<Worker>[] = [
     {
       header: "Worker Details",
-      sortKey: "name",
-      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-md bg-secondary/10 flex items-center justify-center text-secondary font-medium">
@@ -162,8 +170,6 @@ export default function WorkersPage() {
     },
     {
       header: "Account Info",
-      sortKey: "user_email",
-      sortable: true,
       cell: (item) => (
         <div>
           {item.user_email ? (
@@ -177,7 +183,7 @@ export default function WorkersPage() {
     },
     {
       header: "Gender",
-      sortKey: "gender",
+      sortKey: "gender_id",
       sortable: true,
       cell: (item) => (
         <Badge variant="outline" className="bg-background capitalize">
@@ -187,8 +193,6 @@ export default function WorkersPage() {
     },
     {
       header: "Age",
-      sortKey: "date_of_birth",
-      sortable: true,
       cell: (item) => {
         let age = "N/A"
         if (item.date_of_birth) {
@@ -252,7 +256,7 @@ export default function WorkersPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={tableControls.processedData} 
+            data={workers} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
@@ -260,17 +264,21 @@ export default function WorkersPage() {
               tableControls.setSearchQuery(q)
               setPage(1)
             }}
-            searchPlaceholder="Search by worker name or email..."
-            searchFields={workerSearchFields}
-            selectedSearchFields={tableControls.selectedSearchFields}
-            onToggleSearchField={tableControls.toggleSearchField}
-            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            searchPlaceholder="Search by name, telephone, email, or username..."
+            searchHint={ENCRYPTED_SEARCH_HINT}
+            hideSearchFields
             filters={workerFilters}
             filterValues={tableControls.filterValues}
-            onFilterChange={tableControls.setFilterValue}
+            onFilterChange={(key, value) => {
+              tableControls.setFilterValue(key, value)
+              setPage(1)
+            }}
             sortBy={tableControls.sortBy}
             sortOrder={tableControls.sortOrder}
-            onSortChange={tableControls.toggleSort}
+            onSortChange={(key) => {
+              tableControls.toggleSort(key)
+              setPage(1)
+            }}
             onResetControls={() => {
               setSearchQuery("")
               setPage(1)
@@ -287,7 +295,6 @@ export default function WorkersPage() {
         </CardContent>
       </Card>
 
-      {/* Delete Worker AlertDialog */}
       <AlertDialog open={!!deletingWorker} onOpenChange={(open) => !open && setDeletingWorker(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

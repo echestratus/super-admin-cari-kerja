@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Plus, Edit2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { useTableControls } from "@/hooks/use-table-controls"
+import { useDebounce } from "@/hooks/use-debounce"
 import type { SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
 import {
   Dialog,
@@ -77,6 +78,8 @@ const LOOKUP_TABLES = LOOKUP_GROUPS.flatMap((g) => g.tables)
 export default function LookupsPage() {
   const queryClient = useQueryClient()
   const [activeTable, setActiveTable] = useState(LOOKUP_TABLES[0].id)
+  const [searchQuery, setSearchQuery] = useState("")
+  const debouncedSearch = useDebounce(searchQuery, 500)
   
   // Modal states
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -85,9 +88,11 @@ export default function LookupsPage() {
   const [formData, setFormData] = useState({ name: "", iso_alpha2: "", iso_alpha3: "" })
 
   const { data: records = [], isLoading } = useQuery({
-    queryKey: ["lookups", activeTable],
+    queryKey: ["lookups", activeTable, debouncedSearch],
     queryFn: async () => {
-      const res = await apiClient.get(`/admin/lookups/${activeTable}`)
+      const res = await apiClient.get(`/admin/lookups/${activeTable}`, {
+        params: { search: debouncedSearch.trim() || undefined },
+      })
       return res.data?.data || []
     }
   })
@@ -169,6 +174,7 @@ export default function LookupsPage() {
   })
 
   useEffect(() => {
+    setSearchQuery("")
     tableControls.resetControls()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTable])
@@ -286,8 +292,11 @@ export default function LookupsPage() {
             columns={columns}
             data={tableControls.processedData}
             isLoading={isLoading}
-            searchQuery={tableControls.searchQuery}
-            onSearchChange={tableControls.setSearchQuery}
+            searchQuery={searchQuery}
+            onSearchChange={(query) => {
+              setSearchQuery(query)
+              tableControls.setSearchQuery(query)
+            }}
             searchPlaceholder="Search ID, name, ISO codes, currency code..."
             searchFields={searchFields}
             selectedSearchFields={tableControls.selectedSearchFields}

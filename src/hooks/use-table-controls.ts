@@ -99,7 +99,7 @@ export function useTableControls<T>({
 
   const hasActiveControls =
     searchQuery.trim().length > 0 ||
-    selectedSearchFields.length !== searchFields.length ||
+    (clientSide && selectedSearchFields.length !== searchFields.length) ||
     Object.values(filterValues).some((value) => value && value !== "all") ||
     sortBy !== defaultSortBy ||
     sortOrder !== defaultSortOrder
@@ -114,6 +114,8 @@ export function useTableControls<T>({
     setFilterValue,
     sortBy,
     sortOrder,
+    setSortBy,
+    setSortOrder,
     toggleSort,
     resetControls,
     hasActiveControls,
@@ -121,5 +123,6 @@ export function useTableControls<T>({
     searchFields,
     filters,
     sortFields,
+    clientSide,
   }
 }

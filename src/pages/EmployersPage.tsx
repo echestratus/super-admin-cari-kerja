@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
@@ -10,6 +10,7 @@ import type { ColumnDef } from "@/components/ui/data-table"
 import { Building2, CheckCircle2, XCircle, Edit2, Trash2 } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
+import { buildListQueryParams } from "@/lib/list-query"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -22,13 +23,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useTableControls } from "@/hooks/use-table-controls"
-import type { FilterDef, SearchFieldDef, SortFieldDef } from "@/lib/table-controls"
+import type { FilterDef, SortFieldDef } from "@/lib/table-controls"
+import { useLookup, toLookupOptions } from "@/hooks/use-lookup"
 
 interface Employer {
   id: string
   company_name: string
   email: string
   is_verified: boolean
+  is_vip?: boolean
   created_at?: string
   updated_at?: string
   deleted_at?: string
@@ -50,26 +53,11 @@ interface PaginatedResponse {
   }
 }
 
-const employerSearchFields: SearchFieldDef[] = [
-  { key: "company_name", label: "Company", getValue: (item: Employer) => item.company_name },
-  { key: "email", label: "Company Email", getValue: (item: Employer) => item.email },
-  { key: "user_email", label: "User Email", getValue: (item: Employer) => item.user_email },
-  { key: "user_username", label: "Username", getValue: (item: Employer) => item.user_username },
-]
+const ENCRYPTED_SEARCH_HINT =
+  "Gunakan email/nama lengkap untuk hasil akurat (kolom sensitif terenkripsi)."
 
-const employerFilters: FilterDef[] = [{
-  key: "is_verified",
-  label: "Verification",
-  options: [{ value: "true", label: "Verified" }, { value: "false", label: "Pending" }],
-  getValue: (item: Employer) => item.is_verified,
-}]
-
-const employerSortFields: SortFieldDef[] = [
-  { key: "company_name", getValue: (item: Employer) => item.company_name },
-  { key: "user_email", getValue: (item: Employer) => item.user_email },
-  { key: "is_verified", getValue: (item: Employer) => item.is_verified },
-  { key: "created_at", getValue: (item: Employer) => item.created_at },
-]
+const EMPLOYER_SORT_KEYS = ["created_at", "updated_at", "is_verified", "is_vip"]
+const EMPLOYER_FILTER_KEYS = ["is_verified", "industry_id", "deleted_state"]
 
 export default function EmployersPage() {
   const queryClient = useQueryClient()
@@ -82,28 +70,79 @@ export default function EmployersPage() {
   const [deletingEmployer, setDeletingEmployer] = useState<Employer | null>(null)
   const [hardDelete, setHardDelete] = useState(false)
 
+  const { data: industries } = useLookup("industries")
+  const industryOptions = useMemo(() => toLookupOptions(industries), [industries])
+
+  const employerFilters = useMemo<FilterDef[]>(
+    () => [
+      {
+        key: "is_verified",
+        label: "Verification",
+        options: [
+          { value: "true", label: "Verified" },
+          { value: "false", label: "Pending" },
+        ],
+        getValue: (item: Employer) => item.is_verified,
+      },
+      {
+        key: "industry_id",
+        label: "Industry",
+        options: industryOptions,
+        getValue: (item: Employer) => item.industry_id,
+      },
+      {
+        key: "deleted_state",
+        label: "Record",
+        options: [
+          { value: "active", label: "Active only" },
+          { value: "deleted", label: "Deleted only" },
+          { value: "all", label: "All" },
+        ],
+        getValue: (item: Employer) => (item.deleted_at ? "deleted" : "active"),
+      },
+    ],
+    [industryOptions]
+  )
+
+  const employerSortFields: SortFieldDef[] = [
+    { key: "is_verified", getValue: (item: Employer) => item.is_verified },
+    { key: "is_vip", getValue: (item: Employer) => item.is_vip },
+    { key: "created_at", getValue: (item: Employer) => item.created_at },
+    { key: "updated_at", getValue: (item: Employer) => item.updated_at },
+  ]
+
+  const tableControls = useTableControls({
+    data: [],
+    filters: employerFilters,
+    sortFields: employerSortFields,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    clientSide: false,
+  })
+
+  const listParams = buildListQueryParams({
+    page,
+    limit: pageSize,
+    search: debouncedSearch,
+    sortBy: tableControls.sortBy,
+    sortOrder: tableControls.sortOrder,
+    defaultSortBy: "created_at",
+    defaultSortOrder: "desc",
+    filterValues: tableControls.filterValues,
+    allowedFilters: EMPLOYER_FILTER_KEYS,
+    allowedSortBy: EMPLOYER_SORT_KEYS,
+  })
+
   const { data: response, isLoading } = useQuery<PaginatedResponse>({
-    queryKey: ["employers", page, pageSize, debouncedSearch],
+    queryKey: ["employers", listParams],
     queryFn: async () => {
-      const res = await apiClient.get("/admin/employers", {
-        params: {
-          page,
-          limit: pageSize,
-          search: debouncedSearch
-        }
-      })
+      const res = await apiClient.get("/admin/employers", { params: listParams })
       return res.data
     },
   })
 
   const employers = response?.data || []
   const totalEmployers = getTotalFromMeta(response?.meta)
-  const tableControls = useTableControls({
-    data: employers,
-    searchFields: employerSearchFields,
-    filters: employerFilters,
-    sortFields: employerSortFields,
-  })
 
   const verifyMutation = useMutation({
     mutationFn: async ({ id, is_verified }: { id: string, is_verified: boolean }) => {
@@ -138,8 +177,6 @@ export default function EmployersPage() {
   const columns: ColumnDef<Employer>[] = [
     {
       header: "Company Details",
-      sortKey: "company_name",
-      sortable: true,
       cell: (item) => (
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-md bg-secondary/10 flex items-center justify-center text-secondary font-medium">
@@ -161,8 +198,6 @@ export default function EmployersPage() {
     },
     {
       header: "Account Info",
-      sortKey: "user_email",
-      sortable: true,
       cell: (item) => (
         <div>
           {item.user_email ? (
@@ -179,12 +214,17 @@ export default function EmployersPage() {
       sortKey: "is_verified",
       sortable: true,
       cell: (item) => (
-        <Badge 
-          variant={item.is_verified ? "default" : "secondary"}
-          className={item.is_verified ? "bg-success/10 text-success hover:bg-success/20 border-transparent" : "bg-warning/10 text-warning hover:bg-warning/20 border-transparent"}
-        >
-          {item.is_verified ? "Verified" : "Pending Verification"}
-        </Badge>
+        <div className="flex gap-2">
+          <Badge 
+            variant={item.is_verified ? "default" : "secondary"}
+            className={item.is_verified ? "bg-success/10 text-success hover:bg-success/20 border-transparent" : "bg-warning/10 text-warning hover:bg-warning/20 border-transparent"}
+          >
+            {item.is_verified ? "Verified" : "Pending Verification"}
+          </Badge>
+          {item.is_vip && (
+            <Badge variant="outline" className="bg-background">VIP</Badge>
+          )}
+        </div>
       ),
     },
     {
@@ -251,7 +291,7 @@ export default function EmployersPage() {
         <CardContent className="px-0">
           <DataTable 
             columns={columns} 
-            data={tableControls.processedData} 
+            data={employers} 
             isLoading={isLoading} 
             searchQuery={searchQuery}
             onSearchChange={(q) => {
@@ -259,17 +299,21 @@ export default function EmployersPage() {
               tableControls.setSearchQuery(q)
               setPage(1)
             }}
-            searchPlaceholder="Search by company name or email..."
-            searchFields={employerSearchFields}
-            selectedSearchFields={tableControls.selectedSearchFields}
-            onToggleSearchField={tableControls.toggleSearchField}
-            onSelectAllSearchFields={tableControls.selectAllSearchFields}
+            searchPlaceholder="Search by company, contact, email, or username..."
+            searchHint={ENCRYPTED_SEARCH_HINT}
+            hideSearchFields
             filters={employerFilters}
             filterValues={tableControls.filterValues}
-            onFilterChange={tableControls.setFilterValue}
+            onFilterChange={(key, value) => {
+              tableControls.setFilterValue(key, value)
+              setPage(1)
+            }}
             sortBy={tableControls.sortBy}
             sortOrder={tableControls.sortOrder}
-            onSortChange={tableControls.toggleSort}
+            onSortChange={(key) => {
+              tableControls.toggleSort(key)
+              setPage(1)
+            }}
             onResetControls={() => {
               setSearchQuery("")
               setPage(1)
@@ -286,7 +330,6 @@ export default function EmployersPage() {
         </CardContent>
       </Card>
 
-      {/* Delete Employer AlertDialog */}
       <AlertDialog open={!!deletingEmployer} onOpenChange={(open) => !open && setDeletingEmployer(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
