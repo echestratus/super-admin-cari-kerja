@@ -114,36 +114,12 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
     mutationFn: async (id: string) => {
       return apiClient.delete(`/admin/conversations/${viewingConversation!.id}/messages/${id}`)
     },
-    onSuccess: (_data, deletedId) => {
-      const conversationId = viewingConversation?.id
-      const messagesKey = ["admin-conversation-messages", conversationId] as const
-      const previousMessages =
-        queryClient.getQueryData<Message[]>(messagesKey) || []
-      const remaining = previousMessages.filter((msg) => msg.id !== deletedId)
-
-      queryClient.setQueryData<Message[]>(messagesKey, remaining)
-
-      // Keep list "Last Message" in sync. Do not refetch conversations yet — backend
-      // currently leaves conversations.last_message stale after delete.
-      const latest = [...remaining].sort((a, b) => {
-        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0
-        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0
-        return bTime - aTime
-      })[0]
-
-      queryClient.setQueryData<Conversation[]>(queryKey, (prev) => {
-        if (!prev || !conversationId) return prev
-        return prev.map((item) =>
-          item.id === conversationId
-            ? {
-                ...item,
-                last_message: latest?.message || "",
-                updated_at: latest?.created_at || item.updated_at,
-              }
-            : item
-        )
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["admin-conversation-messages", viewingConversation?.id],
       })
-
+      // Backend syncs conversations.last_message / last_message_at on delete.
+      queryClient.invalidateQueries({ queryKey })
       setDeletingMessage(null)
       toast.success("Message deleted successfully.")
     },
@@ -151,15 +127,6 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
       toast.error(err.response?.data?.message || "Failed to delete message.")
     },
   })
-
-  const resolveSenderLabel = (msg: Message) => {
-    // Prefer decrypted names from the conversation row (worker_name / company_name).
-    // Message API aliases encrypted columns as sender_name, which may still be ciphertext.
-    if (msg.role_id === 1) {
-      return viewingConversation?.worker_name || msg.sender_name || "Worker"
-    }
-    return viewingConversation?.company_name || msg.sender_name || "Recruiter"
-  }
 
   const columns: ColumnDef<Conversation>[] = [
     {
@@ -281,7 +248,7 @@ export function ConversationsSection({ baseUrl, queryKey, perspective }: Convers
                       )}
                     >
                       <div className="text-xs font-medium text-muted-foreground mb-0.5">
-                        {resolveSenderLabel(msg)}
+                        {msg.sender_name || (isWorker ? "Worker" : "Recruiter")}
                       </div>
                       <div className="whitespace-pre-wrap break-words">{msg.message}</div>
                       <div className="flex items-center justify-between gap-2 mt-1">
