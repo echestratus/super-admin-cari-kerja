@@ -128,14 +128,14 @@ export default function EmployerDetailPage() {
 
   const verifyMutation = useMutation({
     mutationFn: async () => {
-      const action = employer?.is_verified ? "unverify" : "verify"
-      await apiClient.put(`/admin/employers/${id}/verify`, { action })
-      return action
+      const nextVerified = !employer?.is_verified
+      await apiClient.put(`/admin/employers/${id}/verify`, { is_verified: nextVerified })
+      return nextVerified
     },
-    onSuccess: (action) => {
+    onSuccess: (nextVerified) => {
       queryClient.invalidateQueries({ queryKey: ["employer", id] })
       queryClient.invalidateQueries({ queryKey: ["employers"] })
-      toast.success(`Employer ${action === "verify" ? "verified" : "unverified"} successfully.`)
+      toast.success(`Employer ${nextVerified ? "verified" : "unverified"} successfully.`)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to update verification status.")
@@ -279,8 +279,13 @@ export default function EmployerDetailPage() {
               <Building2 className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+              <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
                 {employer?.company_name || "Employer Detail"}
+                {employer?.is_verified ? (
+                  <Badge className="bg-success/10 text-success border-transparent">Verified</Badge>
+                ) : (
+                  <Badge className="bg-warning/10 text-warning border-transparent">Pending Verification</Badge>
+                )}
                 {employer?.deleted_at && (
                   <Badge variant="outline" className="border-danger text-danger bg-danger/5">Deleted</Badge>
                 )}
@@ -292,6 +297,11 @@ export default function EmployerDetailPage() {
                 {employer?.user_email || "No linked account"}
                 {employer?.user_username && ` · @${employer.user_username}`}
               </p>
+              {!employer?.is_verified && (
+                <p className="text-xs text-warning mt-1">
+                  Unverified employers cannot publish job posts on the portal (VERIFICATION_REQUIRED).
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -322,7 +332,14 @@ export default function EmployerDetailPage() {
           <Card className="border-none shadow-sm">
             <CardHeader className="px-0 pt-0">
               <CardTitle>Company Information</CardTitle>
-              <CardDescription>Complete company profile for this employer.</CardDescription>
+              <CardDescription>
+                Complete company profile for this employer.
+                {" "}Verification status:{" "}
+                <span className={employer?.is_verified ? "text-success font-medium" : "text-warning font-medium"}>
+                  {employer?.is_verified ? "Verified" : "Pending"}
+                </span>
+                . Use the Verify / Unverify button in the header to change it.
+              </CardDescription>
             </CardHeader>
             <CardContent className="px-0">
               <div className="grid gap-4 max-w-3xl">
