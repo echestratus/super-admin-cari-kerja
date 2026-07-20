@@ -11,7 +11,8 @@ import {
   ClipboardList,
   MapPin,
   CreditCard,
-  Receipt
+  Receipt,
+  ShieldAlert,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -22,6 +23,7 @@ export const navItems = [
   { icon: Building2, label: "Employers", href: "/employers" },
   { icon: Briefcase, label: "Jobs", href: "/jobs" },
   { icon: FileText, label: "Applications", href: "/applications" },
+  { icon: ShieldAlert, label: "Trust & Safety", href: "/trust-safety" },
   { icon: CreditCard, label: "Plans", href: "/plans" },
   { icon: Receipt, label: "Payments", href: "/payment-orders" },
   { icon: Database, label: "Lookups", href: "/lookups" },
