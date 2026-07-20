@@ -15,6 +15,7 @@ import PaymentOrdersPage from "./pages/PaymentOrdersPage"
 import AuditLogsPage from "./pages/AuditLogsPage"
 import JobsPage from "./pages/JobsPage"
 import ApplicationsPage from "./pages/ApplicationsPage"
+import TrustSafetyPage from "./pages/TrustSafetyPage"
 import SettingsPage from "./pages/SettingsPage"
 import ProtectedRoute from "./components/ProtectedRoute"
 
@@ -39,6 +40,7 @@ function App() {
             <Route path="locations" element={<LocationsPage />} />
             <Route path="plans" element={<PlansPage />} />
             <Route path="payment-orders" element={<PaymentOrdersPage />} />
+            <Route path="trust-safety" element={<TrustSafetyPage />} />
             <Route path="audit-logs" element={<AuditLogsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
