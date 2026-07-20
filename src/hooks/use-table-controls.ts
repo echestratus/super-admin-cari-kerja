@@ -14,6 +14,8 @@ interface UseTableControlsOptions<T> {
   sortFields?: SortFieldDef[]
   defaultSortBy?: string | null
   defaultSortOrder?: SortOrder
+  /** Optional initial/reset values per filter key (defaults to "all"). */
+  defaultFilterValues?: Record<string, string>
   /** When true, search/filter/sort are applied client-side to `data`. */
   clientSide?: boolean
 }
@@ -25,15 +27,19 @@ export function useTableControls<T>({
   sortFields = [],
   defaultSortBy = null,
   defaultSortOrder = "asc",
+  defaultFilterValues = {},
   clientSide = true,
 }: UseTableControlsOptions<T>) {
+  const buildDefaultFilters = () =>
+    Object.fromEntries(
+      filters.map((filter) => [filter.key, defaultFilterValues[filter.key] ?? "all"])
+    )
+
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSearchFields, setSelectedSearchFields] = useState<string[]>(
     () => searchFields.map((field) => field.key)
   )
-  const [filterValues, setFilterValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(filters.map((filter) => [filter.key, "all"]))
-  )
+  const [filterValues, setFilterValues] = useState<Record<string, string>>(buildDefaultFilters)
   const [sortBy, setSortBy] = useState<string | null>(defaultSortBy)
   const [sortOrder, setSortOrder] = useState<SortOrder>(defaultSortOrder)
 
@@ -92,15 +98,16 @@ export function useTableControls<T>({
   const resetControls = () => {
     setSearchQuery("")
     setSelectedSearchFields(searchFields.map((field) => field.key))
-    setFilterValues(Object.fromEntries(filters.map((filter) => [filter.key, "all"])))
+    setFilterValues(buildDefaultFilters())
     setSortBy(defaultSortBy)
     setSortOrder(defaultSortOrder)
   }
 
+  const defaults = buildDefaultFilters()
   const hasActiveControls =
     searchQuery.trim().length > 0 ||
     (clientSide && selectedSearchFields.length !== searchFields.length) ||
-    Object.values(filterValues).some((value) => value && value !== "all") ||
+    Object.keys(defaults).some((key) => (filterValues[key] || "all") !== defaults[key]) ||
     sortBy !== defaultSortBy ||
     sortOrder !== defaultSortOrder
 
@@ -126,3 +133,4 @@ export function useTableControls<T>({
     clientSide,
   }
 }
+
