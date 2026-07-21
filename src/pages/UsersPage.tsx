@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -104,6 +105,7 @@ const USER_FILTER_KEYS = ["role_id", "is_suspended", "deleted_state"]
 
 export default function UsersPage() {
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
@@ -121,12 +123,18 @@ export default function UsersPage() {
     is_suspended: false,
   })
 
+  const suspendedParam = searchParams.get("is_suspended")
   const tableControls = useTableControls({
     data: [],
     filters: userFilters,
     sortFields: userSortFields,
     defaultSortBy: "created_at",
     defaultSortOrder: "desc",
+    defaultFilterValues: {
+      ...(suspendedParam === "true" || suspendedParam === "false"
+        ? { is_suspended: suspendedParam }
+        : {}),
+    },
     clientSide: false,
   })
 

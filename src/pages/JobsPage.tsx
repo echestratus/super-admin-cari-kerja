@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -104,6 +104,7 @@ const JOB_FILTER_KEYS = ["status", "needs_review"]
 
 export default function JobsPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
@@ -120,12 +121,20 @@ export default function JobsPage() {
     description: "",
   })
 
+  const needsReviewParam = searchParams.get("needs_review")
+  const statusParam = searchParams.get("status")
   const tableControls = useTableControls({
     data: [],
     filters: jobFilters,
     sortFields: jobSortFields,
     defaultSortBy: "created_at",
     defaultSortOrder: "desc",
+    defaultFilterValues: {
+      ...(needsReviewParam === "true" || needsReviewParam === "false"
+        ? { needs_review: needsReviewParam }
+        : {}),
+      ...(statusParam ? { status: statusParam.toLowerCase() } : {}),
+    },
     clientSide: false,
   })
 

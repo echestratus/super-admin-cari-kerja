@@ -1,5 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, Briefcase, Building2, FileText, UserSquare2 } from "lucide-react"
+import {
+  Users,
+  Briefcase,
+  Building2,
+  FileText,
+  UserSquare2,
+  ShieldAlert,
+  MessageSquareWarning,
+  ClipboardList,
+  ShieldBan,
+  BadgeAlert,
+} from "lucide-react"
 import {
   AreaChart,
   Area,
@@ -14,7 +25,9 @@ import {
   Legend
 } from "recharts"
 import { useQuery } from "@tanstack/react-query"
+import { Link } from "react-router-dom"
 import { apiClient } from "@/lib/axios"
+import { cn } from "@/lib/utils"
 
 interface DashboardStats {
   users: number
@@ -22,6 +35,15 @@ interface DashboardStats {
   job_posts: number
   job_applications: number
   workers: number
+}
+
+interface TrustStats {
+  open_fraud_events: number
+  open_chat_reports: number
+  jobs_needs_review: number
+  pending_jobs: number
+  suspended_users: number
+  unverified_employers: number
 }
 
 interface GrowthData {
@@ -42,6 +64,64 @@ interface Activity {
   type: 'USER' | 'EMPLOYER' | 'JOB' | 'APPLICATION' | 'DANGER'
 }
 
+const TRUST_CARDS: {
+  key: keyof TrustStats
+  label: string
+  hint: string
+  href: string
+  icon: typeof ShieldAlert
+  accent: string
+}[] = [
+  {
+    key: "open_fraud_events",
+    label: "Open fraud events",
+    hint: "Trust & Safety queue",
+    href: "/trust-safety",
+    icon: ShieldAlert,
+    accent: "border-l-warning",
+  },
+  {
+    key: "open_chat_reports",
+    label: "Open chat reports",
+    hint: "Source: chat_report",
+    href: "/trust-safety?source=chat_report",
+    icon: MessageSquareWarning,
+    accent: "border-l-warning",
+  },
+  {
+    key: "jobs_needs_review",
+    label: "Jobs needing review",
+    hint: "Open fraud flags",
+    href: "/jobs?needs_review=true",
+    icon: BadgeAlert,
+    accent: "border-l-warning",
+  },
+  {
+    key: "pending_jobs",
+    label: "Pending jobs",
+    hint: "Awaiting moderation",
+    href: "/jobs?status=pending",
+    icon: ClipboardList,
+    accent: "border-l-accent",
+  },
+  {
+    key: "suspended_users",
+    label: "Suspended users",
+    hint: "Users list filter",
+    href: "/users?is_suspended=true",
+    icon: ShieldBan,
+    accent: "border-l-danger",
+  },
+  {
+    key: "unverified_employers",
+    label: "Unverified employers",
+    hint: "Verification queue",
+    href: "/employers?is_verified=false",
+    icon: Building2,
+    accent: "border-l-secondary",
+  },
+]
+
 export default function DashboardPage() {
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["admin-stats"],
@@ -49,6 +129,23 @@ export default function DashboardPage() {
       const res = await apiClient.get("/admin/stats")
       return res.data?.data || { users: 0, recruiters: 0, job_posts: 0, job_applications: 0, workers: 0 }
     }
+  })
+
+  const { data: trustStats, isLoading: trustLoading } = useQuery<TrustStats>({
+    queryKey: ["admin-trust-stats"],
+    queryFn: async () => {
+      const res = await apiClient.get("/admin/dashboard/trust")
+      return (
+        res.data?.data || {
+          open_fraud_events: 0,
+          open_chat_reports: 0,
+          jobs_needs_review: 0,
+          pending_jobs: 0,
+          suspended_users: 0,
+          unverified_employers: 0,
+        }
+      )
+    },
   })
 
   const { data: growthData = [] } = useQuery<GrowthData[]>({
@@ -97,6 +194,46 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-muted-foreground">Overview of system metrics and recent activities.</p>
+      </div>
+
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-lg font-semibold tracking-tight">Trust & Safety</h3>
+          <p className="text-sm text-muted-foreground">
+            Click a card to open the matching moderation queue.
+          </p>
+        </div>
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          {TRUST_CARDS.map((card) => {
+            const Icon = card.icon
+            const value = trustStats?.[card.key] ?? 0
+            return (
+              <Link key={card.key} to={card.href} className="block group">
+                <Card
+                  className={cn(
+                    "h-full hover:shadow-md transition-shadow border-l-4 cursor-pointer",
+                    card.accent
+                  )}
+                >
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium group-hover:text-primary transition-colors">
+                      {card.label}
+                    </CardTitle>
+                    <div className="h-8 w-8 rounded-full bg-warning/10 flex items-center justify-center">
+                      <Icon className="h-4 w-4 text-warning" />
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold tracking-tight">
+                      {trustLoading ? "…" : value}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{card.hint}</p>
+                  </CardContent>
+                </Card>
+              </Link>
+            )
+          })}
+        </div>
       </div>
 
       <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
