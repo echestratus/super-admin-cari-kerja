@@ -32,8 +32,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { useTableControls } from "@/hooks/use-table-controls"
 import type { FilterDef, SortFieldDef } from "@/lib/table-controls"
+import { trustSafetyPath } from "@/lib/trust-safety"
 
 interface Job {
   id: string
@@ -50,15 +52,11 @@ interface Job {
   needs_review?: boolean
   open_fraud_event_id?: string | null
   open_fraud_risk_score?: number | null
+  reject_reason?: string | null
 }
 
 function getJobStatus(job: Job): string {
   return job.status_name || job.status || ""
-}
-
-function trustSafetyPath(eventId?: string | null) {
-  if (eventId) return `/trust-safety?eventId=${encodeURIComponent(eventId)}`
-  return "/trust-safety"
 }
 
 interface PaginatedResponse {
@@ -113,6 +111,8 @@ export default function JobsPage() {
 
   const [editingJob, setEditingJob] = useState<Job | null>(null)
   const [deletingJob, setDeletingJob] = useState<Job | null>(null)
+  const [rejectingJob, setRejectingJob] = useState<Job | null>(null)
+  const [rejectReason, setRejectReason] = useState("")
   const [hardDelete, setHardDelete] = useState(false)
   const [formData, setFormData] = useState({
     title: "",
@@ -204,12 +204,26 @@ export default function JobsPage() {
   }
 
   const statusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string, status: string }) => {
-      await apiClient.put(`/admin/jobs/${id}/status`, { status })
+    mutationFn: async ({
+      id,
+      status,
+      reject_reason,
+    }: {
+      id: string
+      status: string
+      reject_reason?: string
+    }) => {
+      const payload: { status: string; reject_reason?: string } = { status }
+      if (status === "REJECTED") {
+        payload.reject_reason = reject_reason?.trim() || undefined
+      }
+      await apiClient.put(`/admin/jobs/${id}/status`, payload)
       return status
     },
     onSuccess: (status) => {
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
+      setRejectingJob(null)
+      setRejectReason("")
       toast.success(`Job marked as ${status} successfully.`)
     },
     onError: (error: any) => {
@@ -331,6 +345,11 @@ export default function JobsPage() {
                 Trust flag open
               </button>
             )}
+            {status === "REJECTED" && item.reject_reason && (
+              <p className="text-[11px] text-muted-foreground max-w-[180px] truncate" title={item.reject_reason}>
+                Reason: {item.reject_reason}
+              </p>
+            )}
           </div>
         )
       },
@@ -368,7 +387,10 @@ export default function JobsPage() {
                 variant="ghost" 
                 size="sm"
                 className="text-danger hover:text-danger hover:bg-danger/10"
-                onClick={() => statusMutation.mutate({ id: item.id, status: "REJECTED" })}
+                onClick={() => {
+                  setRejectReason("")
+                  setRejectingJob(item)
+                }}
                 disabled={statusMutation.isPending}
                 title="Reject"
               >
@@ -490,6 +512,12 @@ export default function JobsPage() {
                 </Button>
               </div>
             )}
+            {editingJob?.reject_reason && (
+              <div className="rounded-md border border-danger/30 bg-danger/5 p-3 text-sm space-y-1">
+                <div className="font-medium text-danger">Rejection reason</div>
+                <p className="text-muted-foreground text-xs whitespace-pre-wrap">{editingJob.reject_reason}</p>
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="title">Job Title</Label>
               <Input
@@ -531,6 +559,63 @@ export default function JobsPage() {
               disabled={saveMutation.isPending}
             >
               {saveMutation.isPending ? "Saving..." : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Job Dialog */}
+      <Dialog
+        open={!!rejectingJob}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRejectingJob(null)
+            setRejectReason("")
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject job</DialogTitle>
+            <DialogDescription>
+              Provide a rejection reason for{" "}
+              <strong className="text-foreground">{rejectingJob?.title || "this job"}</strong>.
+              It will be stored as <code className="text-xs">reject_reason</code>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Label htmlFor="reject-reason">Reject reason</Label>
+            <Textarea
+              id="reject-reason"
+              rows={4}
+              placeholder="Why is this job being rejected?"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRejectingJob(null)
+                setRejectReason("")
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={statusMutation.isPending || !rejectReason.trim()}
+              onClick={() =>
+                rejectingJob &&
+                statusMutation.mutate({
+                  id: rejectingJob.id,
+                  status: "REJECTED",
+                  reject_reason: rejectReason,
+                })
+              }
+            >
+              {statusMutation.isPending ? "Rejecting..." : "Reject job"}
             </Button>
           </DialogFooter>
         </DialogContent>
