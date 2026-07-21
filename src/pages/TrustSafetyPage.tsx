@@ -30,6 +30,12 @@ type FraudStatus = "open" | "reviewing" | "resolved_clean" | "resolved_actioned"
 type FraudEntityType = "job_post" | "user" | "chat_message" | "payment_order"
 type ResolveAction = "mark_clean" | "approve_job" | "reject_job" | "suspend_user"
 
+interface FraudFlag {
+  code: string
+  detail?: string
+  weight?: number
+}
+
 interface FraudEvent {
   id: string
   entity_type: FraudEntityType | string
@@ -37,7 +43,7 @@ interface FraudEvent {
   source?: string
   risk_score: number
   status: FraudStatus | string
-  flags?: string[] | string | Record<string, unknown>
+  flags?: FraudFlag[] | string[] | string | Record<string, unknown> | null
   summary?: string
   metadata?: Record<string, unknown> | string | null
   job_title?: string
@@ -98,25 +104,51 @@ const fraudSortFields: SortFieldDef[] = [
   { key: "updated_at", getValue: (item: FraudEvent) => item.updated_at },
 ]
 
-function parseFlags(flags: FraudEvent["flags"]): string[] {
-  if (!flags) return []
-  if (Array.isArray(flags)) return flags.map(String)
-  if (typeof flags === "string") {
-    try {
-      const parsed = JSON.parse(flags)
-      if (Array.isArray(parsed)) return parsed.map(String)
-      return flags
-        .split(",")
-        .map((part) => part.trim())
-        .filter(Boolean)
-    } catch {
-      return flags
-        .split(",")
-        .map((part) => part.trim())
-        .filter(Boolean)
+function normalizeFlag(raw: unknown): FraudFlag | null {
+  if (raw == null) return null
+  if (typeof raw === "string") {
+    const code = raw.trim()
+    return code ? { code } : null
+  }
+  if (typeof raw === "object") {
+    const obj = raw as Record<string, unknown>
+    const code = String(obj.code ?? obj.flag ?? obj.name ?? "").trim()
+    if (!code) return null
+    return {
+      code,
+      detail: obj.detail != null ? String(obj.detail) : undefined,
+      weight: typeof obj.weight === "number" ? obj.weight : undefined,
     }
   }
-  return Object.keys(flags)
+  return { code: String(raw) }
+}
+
+function parseFlags(flags: FraudEvent["flags"]): FraudFlag[] {
+  if (!flags) return []
+
+  let rawList: unknown[] = []
+  if (Array.isArray(flags)) {
+    rawList = flags
+  } else if (typeof flags === "string") {
+    try {
+      const parsed = JSON.parse(flags)
+      rawList = Array.isArray(parsed) ? parsed : [flags]
+    } catch {
+      rawList = flags.split(",").map((part) => part.trim()).filter(Boolean)
+    }
+  } else if (typeof flags === "object") {
+    rawList = Object.values(flags)
+  }
+
+  return rawList.map(normalizeFlag).filter((flag): flag is FraudFlag => !!flag)
+}
+
+function isResolvable(status: string) {
+  return status === "open" || status === "reviewing"
+}
+
+function isResolved(status: string) {
+  return status === "resolved_clean" || status === "resolved_actioned"
 }
 
 function statusBadgeClass(status: string) {
@@ -131,10 +163,6 @@ function riskTone(score: number) {
   if (score >= 80) return "text-danger font-semibold"
   if (score >= 50) return "text-warning font-semibold"
   return "text-foreground font-medium"
-}
-
-function isResolved(status: string) {
-  return status === "resolved_clean" || status === "resolved_actioned"
 }
 
 function formatMetadata(metadata: FraudEvent["metadata"]) {
@@ -193,7 +221,8 @@ export default function TrustSafetyPage() {
   const [resolveNote, setResolveNote] = useState("")
 
   useEffect(() => {
-    const deepLinkId = searchParams.get("open_fraud_event_id")
+    const deepLinkId =
+      searchParams.get("eventId") || searchParams.get("open_fraud_event_id")
     if (deepLinkId) {
       setResolveNote("")
       setSelectedId(deepLinkId)
@@ -201,8 +230,9 @@ export default function TrustSafetyPage() {
   }, [searchParams])
 
   const clearDeepLink = () => {
-    if (searchParams.has("open_fraud_event_id")) {
+    if (searchParams.has("eventId") || searchParams.has("open_fraud_event_id")) {
       const next = new URLSearchParams(searchParams)
+      next.delete("eventId")
       next.delete("open_fraud_event_id")
       setSearchParams(next, { replace: true })
     }
@@ -301,8 +331,13 @@ export default function TrustSafetyPage() {
         return (
           <div className="flex flex-wrap gap-1 max-w-[220px]">
             {flags.slice(0, 3).map((flag) => (
-              <Badge key={flag} variant="outline" className="bg-background text-[10px] font-normal">
-                {flag}
+              <Badge
+                key={flag.code}
+                variant="outline"
+                className="bg-background text-[10px] font-normal"
+                title={flag.detail || flag.code}
+              >
+                {flag.code}
               </Badge>
             ))}
             {flags.length > 3 && (
@@ -371,7 +406,7 @@ export default function TrustSafetyPage() {
   const activeDetail = detail
   const detailFlags = parseFlags(activeDetail?.flags)
   const metadataText = formatMetadata(activeDetail?.metadata)
-  const canResolve = activeDetail && !isResolved(activeDetail.status)
+  const canResolve = activeDetail && isResolvable(activeDetail.status)
   const isJobPost = activeDetail?.entity_type === "job_post"
 
   return (
@@ -508,8 +543,18 @@ export default function TrustSafetyPage() {
                 <div className="flex flex-wrap gap-1.5">
                   {detailFlags.length ? (
                     detailFlags.map((flag) => (
-                      <Badge key={flag} variant="outline" className="bg-background">
-                        {flag}
+                      <Badge
+                        key={flag.code}
+                        variant="outline"
+                        className="bg-background"
+                        title={flag.detail || flag.code}
+                      >
+                        {flag.code}
+                        {flag.detail ? (
+                          <span className="ml-1 font-normal text-muted-foreground">
+                            · {flag.detail}
+                          </span>
+                        ) : null}
                       </Badge>
                     ))
                   ) : (
