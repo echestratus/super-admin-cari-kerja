@@ -79,8 +79,14 @@ const ENTITY_TYPE_OPTIONS = [
   { value: "payment_order", label: "Payment order" },
 ]
 
+const SOURCE_OPTIONS = [
+  { value: "chat_report", label: "Chat report" },
+  { value: "job_heuristic", label: "Job heuristic" },
+  { value: "manual", label: "Manual" },
+]
+
 const SORT_KEYS = ["risk_score", "created_at", "status", "updated_at"]
-const FILTER_KEYS = ["status", "entity_type"]
+const FILTER_KEYS = ["status", "entity_type", "source"]
 
 const fraudFilters: FilterDef[] = [
   {
@@ -94,6 +100,12 @@ const fraudFilters: FilterDef[] = [
     label: "Entity",
     options: ENTITY_TYPE_OPTIONS,
     getValue: (item: FraudEvent) => item.entity_type,
+  },
+  {
+    key: "source",
+    label: "Source",
+    options: SOURCE_OPTIONS,
+    getValue: (item: FraudEvent) => item.source,
   },
 ]
 
@@ -175,12 +187,36 @@ function formatMetadata(metadata: FraudEvent["metadata"]) {
   }
 }
 
+function parseMetadataObject(metadata: FraudEvent["metadata"]): Record<string, unknown> {
+  if (!metadata) return {}
+  if (typeof metadata === "string") {
+    try {
+      const parsed = JSON.parse(metadata)
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {}
+    } catch {
+      return {}
+    }
+  }
+  return typeof metadata === "object" ? metadata : {}
+}
+
+function isChatReportEvent(event: FraudEvent | undefined) {
+  if (!event) return false
+  if (event.source === "chat_report") return true
+  if (event.entity_type === "chat_message") return true
+  const meta = parseMetadataObject(event.metadata)
+  return !!(meta.chat_report_id || meta.conversation_id || meta.reported_user_id)
+}
+
 const RESOLVE_ACTIONS: {
   action: ResolveAction
   label: string
   icon: typeof CheckCircle2
   className: string
+  /** Only show for job_post events */
   jobOnly?: boolean
+  /** Hide for chat report / chat_message events */
+  hideForChat?: boolean
 }[] = [
   {
     action: "mark_clean",
@@ -194,6 +230,7 @@ const RESOLVE_ACTIONS: {
     icon: ThumbsUp,
     className: "text-success hover:bg-success/10",
     jobOnly: true,
+    hideForChat: true,
   },
   {
     action: "reject_job",
@@ -201,6 +238,7 @@ const RESOLVE_ACTIONS: {
     icon: ThumbsDown,
     className: "text-danger hover:bg-danger/10",
     jobOnly: true,
+    hideForChat: true,
   },
   {
     action: "suspend_user",
@@ -361,8 +399,15 @@ export default function TrustSafetyPage() {
       header: "Job / Company",
       cell: (item) => (
         <div>
-          <div className="font-medium text-sm">{item.job_title || "—"}</div>
-          <div className="text-xs text-muted-foreground">{item.company_name || item.entity_type}</div>
+          <div className="font-medium text-sm">{item.job_title || item.summary || "—"}</div>
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+            <span>{item.company_name || item.entity_type}</span>
+            {item.source && (
+              <Badge variant="outline" className="text-[10px] h-4 px-1 font-normal bg-background">
+                {item.source}
+              </Badge>
+            )}
+          </div>
         </div>
       ),
     },
@@ -405,9 +450,32 @@ export default function TrustSafetyPage() {
 
   const activeDetail = detail
   const detailFlags = parseFlags(activeDetail?.flags)
+  const metadataObj = parseMetadataObject(activeDetail?.metadata)
   const metadataText = formatMetadata(activeDetail?.metadata)
   const canResolve = activeDetail && isResolvable(activeDetail.status)
   const isJobPost = activeDetail?.entity_type === "job_post"
+  const isChatReport = isChatReportEvent(activeDetail)
+  const chatConversationId = metadataObj.conversation_id
+    ? String(metadataObj.conversation_id)
+    : null
+  const chatReportedUserId = metadataObj.reported_user_id
+    ? String(metadataObj.reported_user_id)
+    : null
+  const chatReason =
+    metadataObj.reason != null
+      ? String(metadataObj.reason)
+      : detailFlags.find((f) => f.code === "USER_REPORT")?.detail || null
+  const chatReporterUserId = metadataObj.reporter_user_id
+    ? String(metadataObj.reporter_user_id)
+    : null
+  const chatMessageId = metadataObj.message_id ? String(metadataObj.message_id) : null
+  const chatReportId = metadataObj.chat_report_id ? String(metadataObj.chat_report_id) : null
+
+  const visibleResolveActions = RESOLVE_ACTIONS.filter((item) => {
+    if (item.jobOnly && !isJobPost) return false
+    if (item.hideForChat && isChatReport) return false
+    return true
+  })
 
   return (
     <div className="space-y-6">
@@ -417,7 +485,9 @@ export default function TrustSafetyPage() {
           Trust & Safety
         </h2>
         <p className="text-muted-foreground">
-          Review flagged job posts and related entities held by fraud heuristics, then resolve in one place.
+          Review flagged jobs and chat reports held by heuristics or user reports, then resolve in one queue.
+          Filter by source <span className="font-medium">chat_report</span> or entity{" "}
+          <span className="font-medium">chat_message</span> / <span className="font-medium">user</span>.
         </p>
       </div>
 
@@ -538,6 +608,47 @@ export default function TrustSafetyPage() {
                 </div>
               </div>
 
+              {isChatReport && (
+                <div className="rounded-md border border-warning/30 bg-warning/5 p-3 space-y-3">
+                  <div className="text-sm font-medium text-warning">Chat report details</div>
+                  <div className="grid grid-cols-1 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Reason</div>
+                      <p className="whitespace-pre-wrap">{chatReason || "—"}</p>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Conversation ID</div>
+                      <div className="font-mono text-xs break-all">{chatConversationId || "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">Reported user ID</div>
+                      <div className="font-mono text-xs break-all">{chatReportedUserId || "—"}</div>
+                    </div>
+                    {chatReporterUserId && (
+                      <div>
+                        <div className="text-xs text-muted-foreground">Reporter user ID</div>
+                        <div className="font-mono text-xs break-all">{chatReporterUserId}</div>
+                      </div>
+                    )}
+                    {chatMessageId && (
+                      <div>
+                        <div className="text-xs text-muted-foreground">Message ID</div>
+                        <div className="font-mono text-xs break-all">{chatMessageId}</div>
+                      </div>
+                    )}
+                    {chatReportId && (
+                      <div>
+                        <div className="text-xs text-muted-foreground">Chat report ID</div>
+                        <div className="font-mono text-xs break-all">{chatReportId}</div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Resolve with Mark clean or Suspend user — backend syncs linked chat_reports.
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <div className="text-xs text-muted-foreground">Flags</div>
                 <div className="flex flex-wrap gap-1.5">
@@ -597,7 +708,7 @@ export default function TrustSafetyPage() {
                   </div>
 
                   <SheetFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
-                    {RESOLVE_ACTIONS.filter((item) => !item.jobOnly || isJobPost).map((item) => (
+                    {visibleResolveActions.map((item) => (
                       <Button
                         key={item.action}
                         variant="outline"
