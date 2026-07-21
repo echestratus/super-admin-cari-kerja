@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
-import { User, Edit2, Trash2 } from "lucide-react"
+import { User, Edit2, Trash2, ShieldAlert } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
 import { buildListQueryParams } from "@/lib/list-query"
+import { trustSafetyPath } from "@/lib/trust-safety"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -38,6 +39,8 @@ interface Worker {
   address?: string
   user_email?: string
   user_username?: string
+  needs_review?: boolean
+  open_fraud_event_id?: string | null
 }
 
 interface PaginatedResponse {
@@ -76,20 +79,31 @@ const workerFilters: FilterDef[] = [
     ],
     getValue: (item: Worker) => (item.deleted_at ? "deleted" : "active"),
   },
+  {
+    key: "needs_review",
+    label: "Trust & Safety",
+    options: [
+      { value: "true", label: "Needs review only" },
+      { value: "false", label: "No open flags" },
+    ],
+    getValue: (item: Worker) => item.needs_review,
+  },
 ]
 
 const workerSortFields: SortFieldDef[] = [
   { key: "gender_id", getValue: (item: Worker) => item.gender_id },
   { key: "created_at", getValue: (item: Worker) => item.created_at },
   { key: "updated_at", getValue: (item: Worker) => item.updated_at },
+  { key: "needs_review", getValue: (item: Worker) => item.needs_review },
 ]
 
-const WORKER_SORT_KEYS = ["created_at", "updated_at", "gender_id"]
-const WORKER_FILTER_KEYS = ["gender_id", "deleted_state"]
+const WORKER_SORT_KEYS = ["created_at", "updated_at", "gender_id", "needs_review"]
+const WORKER_FILTER_KEYS = ["gender_id", "deleted_state", "needs_review"]
 
 export default function WorkersPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
@@ -98,12 +112,18 @@ export default function WorkersPage() {
   const [deletingWorker, setDeletingWorker] = useState<Worker | null>(null)
   const [hardDelete, setHardDelete] = useState(false)
 
+  const needsReviewParam = searchParams.get("needs_review")
   const tableControls = useTableControls({
     data: [],
     filters: workerFilters,
     sortFields: workerSortFields,
     defaultSortBy: "created_at",
     defaultSortOrder: "desc",
+    defaultFilterValues: {
+      ...(needsReviewParam === "true" || needsReviewParam === "false"
+        ? { needs_review: needsReviewParam }
+        : {}),
+    },
     clientSide: false,
   })
 
@@ -124,12 +144,20 @@ export default function WorkersPage() {
     queryKey: ["workers", listParams],
     queryFn: async () => {
       const res = await apiClient.get("/admin/workers", { params: listParams })
-      return res.data
+      const rows = (res.data?.data || []).map((worker: Worker) => ({
+        ...worker,
+        needs_review: Boolean(worker.needs_review),
+      }))
+      return { ...res.data, data: rows }
     },
   })
 
   const workers = response?.data || []
   const totalWorkers = getTotalFromMeta(response?.meta)
+
+  const goToTrustSafety = (eventId?: string | null) => {
+    navigate(trustSafetyPath(eventId))
+  }
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -155,12 +183,28 @@ export default function WorkersPage() {
             <User className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground flex items-center gap-2">
+            <div className="font-medium text-foreground flex items-center gap-2 flex-wrap">
               {item.name || "Unknown Worker"}
               {item.deleted_at && (
                 <Badge variant="outline" className="border-danger text-danger bg-danger/5 text-[10px] h-4 px-1">
                   Deleted
                 </Badge>
+              )}
+              {item.needs_review && (
+                <button
+                  type="button"
+                  className="inline-flex"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    goToTrustSafety(item.open_fraud_event_id)
+                  }}
+                  title="Open Trust & Safety queue"
+                >
+                  <Badge className="bg-warning/10 text-warning border-transparent text-[10px] h-5 px-1.5 gap-1 cursor-pointer hover:bg-warning/20">
+                    <ShieldAlert className="h-3 w-3" />
+                    Needs review
+                  </Badge>
+                </button>
               )}
             </div>
             <div className="text-sm text-muted-foreground">{item.telephone}</div>

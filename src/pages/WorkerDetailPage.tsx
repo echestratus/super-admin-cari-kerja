@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useParams, Link, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,8 @@ import type { ColumnDef } from "@/components/ui/data-table"
 import { ResourceSection } from "@/components/resource-section"
 import { ConversationsSection } from "@/components/conversations-section"
 import { useLookup, toLookupOptions, getLookupDisplayName } from "@/hooks/use-lookup"
-import { ArrowLeft, User, Save } from "lucide-react"
+import { trustSafetyPath } from "@/lib/trust-safety"
+import { ArrowLeft, User, Save, ShieldAlert } from "lucide-react"
 import { toast } from "sonner"
 
 interface WorkerDetail {
@@ -39,6 +40,8 @@ interface WorkerDetail {
   deleted_at?: string
   created_at?: string
   updated_at?: string
+  needs_review?: boolean
+  open_fraud_event_id?: string | null
 }
 
 const emptyProfile = {
@@ -57,6 +60,7 @@ const emptyProfile = {
 
 export default function WorkerDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [profileForm, setProfileForm] = useState({ ...emptyProfile })
 
@@ -64,7 +68,11 @@ export default function WorkerDetailPage() {
     queryKey: ["worker", id],
     queryFn: async () => {
       const res = await apiClient.get(`/admin/workers/${id}`)
-      return res.data?.data || res.data
+      const detail = res.data?.data || res.data
+      return {
+        ...detail,
+        needs_review: Boolean(detail?.needs_review),
+      }
     },
     enabled: !!id,
   })
@@ -428,10 +436,23 @@ export default function WorkerDetailPage() {
             <User className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
               {worker?.name || "Worker Detail"}
               {worker?.deleted_at && (
                 <Badge variant="outline" className="border-danger text-danger bg-danger/5">Deleted</Badge>
+              )}
+              {worker?.needs_review && (
+                <button
+                  type="button"
+                  className="inline-flex"
+                  onClick={() => navigate(trustSafetyPath(worker.open_fraud_event_id))}
+                  title="Open related Trust & Safety event"
+                >
+                  <Badge className="bg-warning/10 text-warning border-transparent gap-1 cursor-pointer hover:bg-warning/20">
+                    <ShieldAlert className="h-3 w-3" />
+                    Needs review
+                  </Badge>
+                </button>
               )}
             </h2>
             <p className="text-sm text-muted-foreground">
@@ -441,6 +462,27 @@ export default function WorkerDetailPage() {
           </div>
         </div>
       </div>
+
+      {worker?.needs_review && (
+        <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm space-y-2">
+          <div className="flex items-center gap-2 font-medium text-warning">
+            <ShieldAlert className="h-4 w-4" />
+            Related Trust & Safety flag open
+          </div>
+          <p className="text-muted-foreground text-xs">
+            An open fraud event exists on this worker&apos;s user account or chat activity.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-warning border-warning/40"
+            onClick={() => navigate(trustSafetyPath(worker.open_fraud_event_id))}
+          >
+            Resolve in Trust & Safety
+          </Button>
+        </div>
+      )}
 
       <Tabs defaultValue="profile">
         <TabsList className="flex-wrap h-auto">
