@@ -217,6 +217,8 @@ const RESOLVE_ACTIONS: {
   jobOnly?: boolean
   /** Hide for chat report / chat_message events */
   hideForChat?: boolean
+  /** Require resolution note (e.g. reject_job → reject_reason) */
+  requiresNote?: boolean
 }[] = [
   {
     action: "mark_clean",
@@ -239,6 +241,8 @@ const RESOLVE_ACTIONS: {
     className: "text-danger hover:bg-danger/10",
     jobOnly: true,
     hideForChat: true,
+    /** Note is required — BE stores it as job reject_reason */
+    requiresNote: true,
   },
   {
     action: "suspend_user",
@@ -334,10 +338,16 @@ export default function TrustSafetyPage() {
         action,
         note: note?.trim() || undefined,
       })
-      return res.data
+      return { body: res.data, action }
     },
-    onSuccess: (body) => {
-      toast.success(body?.message || "Fraud event resolved successfully.")
+    onSuccess: ({ body, action }) => {
+      if (action === "approve_job") {
+        toast.success(body?.message || "Job approved. Rejection reason cleared.")
+      } else if (action === "reject_job") {
+        toast.success(body?.message || "Job rejected. Note saved as reject reason.")
+      } else {
+        toast.success(body?.message || "Fraud event resolved successfully.")
+      }
       queryClient.invalidateQueries({ queryKey: ["fraud-events"] })
       queryClient.invalidateQueries({ queryKey: ["fraud-event", selectedId] })
       queryClient.invalidateQueries({ queryKey: ["jobs"] })
@@ -703,36 +713,55 @@ export default function TrustSafetyPage() {
               ) : (
                 <>
                   <div className="grid gap-2">
-                    <Label htmlFor="resolve-note">Resolution note (optional)</Label>
+                    <Label htmlFor="resolve-note">
+                      Resolution note
+                      {visibleResolveActions.some((a) => a.requiresNote)
+                        ? " (required for Reject job — saved as reject_reason)"
+                        : " (optional)"}
+                    </Label>
                     <Textarea
                       id="resolve-note"
                       rows={3}
-                      placeholder="Context for audit trail..."
+                      placeholder={
+                        visibleResolveActions.some((a) => a.action === "approve_job")
+                          ? "Optional note. Approving clears any existing reject_reason."
+                          : "Context for audit trail..."
+                      }
                       value={resolveNote}
                       onChange={(e) => setResolveNote(e.target.value)}
                     />
                   </div>
 
                   <SheetFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
-                    {visibleResolveActions.map((item) => (
-                      <Button
-                        key={item.action}
-                        variant="outline"
-                        className={cn("w-full justify-start", item.className)}
-                        disabled={resolveMutation.isPending || !canResolve}
-                        onClick={() =>
-                          selectedId &&
-                          resolveMutation.mutate({
-                            id: selectedId,
-                            action: item.action,
-                            note: resolveNote,
-                          })
-                        }
-                      >
-                        <item.icon className="h-4 w-4 mr-2" />
-                        {item.label}
-                      </Button>
-                    ))}
+                    {visibleResolveActions.map((item) => {
+                      const noteMissing = Boolean(item.requiresNote && !resolveNote.trim())
+                      return (
+                        <Button
+                          key={item.action}
+                          variant="outline"
+                          className={cn("w-full justify-start", item.className)}
+                          disabled={resolveMutation.isPending || !canResolve || noteMissing}
+                          title={
+                            noteMissing
+                              ? "Enter a note — it will be stored as the job reject reason"
+                              : item.action === "approve_job"
+                                ? "Sets job to OPEN and clears reject_reason"
+                                : undefined
+                          }
+                          onClick={() =>
+                            selectedId &&
+                            resolveMutation.mutate({
+                              id: selectedId,
+                              action: item.action,
+                              note: resolveNote,
+                            })
+                          }
+                        >
+                          <item.icon className="h-4 w-4 mr-2" />
+                          {item.label}
+                        </Button>
+                      )
+                    })}
                   </SheetFooter>
                 </>
               )}
