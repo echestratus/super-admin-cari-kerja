@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -8,10 +9,11 @@ import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Receipt, Eye } from "lucide-react"
+import { Receipt, Eye, ShieldAlert } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
 import { buildListQueryParams } from "@/lib/list-query"
+import { trustSafetyPath } from "@/lib/trust-safety"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -23,6 +25,11 @@ import {
 } from "@/components/ui/dialog"
 import { useTableControls } from "@/hooks/use-table-controls"
 import type { SortFieldDef } from "@/lib/table-controls"
+
+interface SessionAnomalyMeta {
+  risk_score?: number
+  flags?: Array<{ code?: string; detail?: string; weight?: number }>
+}
 
 interface PaymentOrder {
   id: string
@@ -41,6 +48,12 @@ interface PaymentOrder {
   invoice_expires_at?: string
   created_at?: string
   updated_at?: string
+  needs_review?: boolean
+  open_fraud_event_id?: string | null
+  metadata?: {
+    session_anomaly?: SessionAnomalyMeta
+    [key: string]: unknown
+  } | null
 }
 
 interface PaginatedResponse {
@@ -78,17 +91,24 @@ const paymentSortFields: SortFieldDef[] = [
   { key: "created_at", getValue: (item: PaymentOrder) => item.created_at },
   { key: "updated_at", getValue: (item: PaymentOrder) => item.updated_at },
   { key: "paid_at", getValue: (item: PaymentOrder) => item.paid_at },
+  { key: "needs_review", getValue: (item: PaymentOrder) => item.needs_review },
 ]
 
-const PAYMENT_ORDER_SORT_KEYS = ["created_at", "updated_at", "amount", "paid_at", "status"]
-const PAYMENT_ORDER_FILTER_KEYS = ["status", "order_type"]
+const PAYMENT_ORDER_SORT_KEYS = ["created_at", "updated_at", "amount", "paid_at", "status", "needs_review"]
+const PAYMENT_ORDER_FILTER_KEYS = ["status", "order_type", "needs_review"]
 
 export default function PaymentOrdersPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [statusFilter, setStatusFilter] = useState("all")
   const [typeFilter, setTypeFilter] = useState("all")
+  const needsReviewParam = searchParams.get("needs_review")
+  const [needsReviewFilter, setNeedsReviewFilter] = useState(
+    needsReviewParam === "true" || needsReviewParam === "false" ? needsReviewParam : "all"
+  )
   const [page, setPage] = useState(1)
   const pageSize = 10
 
@@ -111,7 +131,11 @@ export default function PaymentOrdersPage() {
     sortOrder: tableControls.sortOrder,
     defaultSortBy: "created_at",
     defaultSortOrder: "desc",
-    filterValues: { status: statusFilter, order_type: typeFilter },
+    filterValues: {
+      status: statusFilter,
+      order_type: typeFilter,
+      needs_review: needsReviewFilter,
+    },
     allowedFilters: PAYMENT_ORDER_FILTER_KEYS,
     allowedSortBy: PAYMENT_ORDER_SORT_KEYS,
   })
@@ -120,12 +144,20 @@ export default function PaymentOrdersPage() {
     queryKey: ["payment-orders", listParams],
     queryFn: async () => {
       const res = await apiClient.get("/admin/payment-orders", { params: listParams })
-      return res.data
+      const rows = (res.data?.data || []).map((order: PaymentOrder) => ({
+        ...order,
+        needs_review: Boolean(order.needs_review),
+      }))
+      return { ...res.data, data: rows }
     },
   })
 
   const orders = response?.data || []
   const totalOrders = getTotalFromMeta(response?.meta)
+
+  const goToTrustSafety = (eventId?: string | null) => {
+    navigate(trustSafetyPath(eventId))
+  }
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -148,7 +180,10 @@ export default function PaymentOrdersPage() {
       const res = await apiClient.get(`/admin/payment-orders/${item.id}`)
       const detail = res.data?.data || res.data
       if (detail?.id) {
-        setViewingOrder(detail)
+        setViewingOrder({
+          ...detail,
+          needs_review: Boolean(detail.needs_review),
+        })
         setNewStatus(detail.status)
       }
     } catch {
@@ -165,8 +200,24 @@ export default function PaymentOrdersPage() {
             <Receipt className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground">
+            <div className="font-medium text-foreground flex items-center gap-2 flex-wrap">
               {item.xendit_external_id || item.id.slice(0, 8)}
+              {item.needs_review && (
+                <button
+                  type="button"
+                  className="inline-flex"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    goToTrustSafety(item.open_fraud_event_id)
+                  }}
+                  title="Open Trust & Safety queue"
+                >
+                  <Badge className="bg-warning/10 text-warning border-transparent text-[10px] h-5 px-1.5 gap-1 cursor-pointer hover:bg-warning/20">
+                    <ShieldAlert className="h-3 w-3" />
+                    Needs review
+                  </Badge>
+                </button>
+              )}
             </div>
             <div className="text-sm text-muted-foreground">
               {item.company_name || item.recruiter_id.slice(0, 8)}
@@ -198,9 +249,20 @@ export default function PaymentOrdersPage() {
       sortKey: "status",
       sortable: true,
       cell: (item) => (
-        <Badge className={STATUS_STYLES[item.status] || ""} variant="secondary">
-          {item.status}
-        </Badge>
+        <div className="flex flex-col gap-1 items-start">
+          <Badge className={STATUS_STYLES[item.status] || ""} variant="secondary">
+            {item.status}
+          </Badge>
+          {item.needs_review && (
+            <button
+              type="button"
+              onClick={() => goToTrustSafety(item.open_fraud_event_id)}
+              className="text-[11px] text-warning hover:underline"
+            >
+              Trust flag open
+            </button>
+          )}
+        </div>
       ),
     },
     {
@@ -267,6 +329,25 @@ export default function PaymentOrdersPage() {
             </SelectContent>
           </Select>
         </div>
+        <div className="flex items-center gap-2">
+          <Label className="whitespace-nowrap text-sm">Trust:</Label>
+          <Select
+            value={needsReviewFilter}
+            onValueChange={(v) => {
+              setNeedsReviewFilter(v)
+              setPage(1)
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="true">Needs review only</SelectItem>
+              <SelectItem value="false">No open flags</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <Card className="border-none shadow-sm">
@@ -295,10 +376,18 @@ export default function PaymentOrdersPage() {
             }}
             onResetControls={() => {
               setSearchQuery("")
+              setStatusFilter("all")
+              setTypeFilter("all")
+              setNeedsReviewFilter("all")
               setPage(1)
               tableControls.resetControls()
             }}
-            hasActiveControls={tableControls.hasActiveControls}
+            hasActiveControls={
+              tableControls.hasActiveControls ||
+              statusFilter !== "all" ||
+              typeFilter !== "all" ||
+              needsReviewFilter !== "all"
+            }
             pagination={{
               page,
               pageSize,
@@ -318,6 +407,56 @@ export default function PaymentOrdersPage() {
           </DialogHeader>
           {viewingOrder && (
             <div className="space-y-4 py-2">
+              {viewingOrder.needs_review && (
+                <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm space-y-2">
+                  <div className="flex items-center gap-2 font-medium text-warning">
+                    <ShieldAlert className="h-4 w-4" />
+                    Needs Trust & Safety review
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    This payment order has an open fraud flag.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-warning border-warning/40"
+                    onClick={() => {
+                      const eventId = viewingOrder.open_fraud_event_id
+                      setViewingOrder(null)
+                      goToTrustSafety(eventId)
+                    }}
+                  >
+                    Resolve in Trust & Safety
+                  </Button>
+                </div>
+              )}
+
+              {viewingOrder.metadata?.session_anomaly && (
+                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm space-y-2">
+                  <div className="font-medium">Session anomaly</div>
+                  <p className="text-xs text-muted-foreground">
+                    Risk score:{" "}
+                    <span className="font-medium text-foreground">
+                      {viewingOrder.metadata.session_anomaly.risk_score ?? "N/A"}
+                    </span>
+                  </p>
+                  {(viewingOrder.metadata.session_anomaly.flags || []).length > 0 ? (
+                    <ul className="text-xs space-y-1 list-disc pl-4">
+                      {viewingOrder.metadata.session_anomaly.flags!.map((flag, idx) => (
+                        <li key={`${flag.code || "flag"}-${idx}`}>
+                          <span className="font-medium">{flag.code || "FLAG"}</span>
+                          {flag.detail ? ` — ${flag.detail}` : ""}
+                          {flag.weight != null ? ` (weight ${flag.weight})` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No flag details recorded.</p>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 <div>
                   <div className="text-muted-foreground text-xs">Order ID</div>

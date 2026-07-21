@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useParams, Link, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,8 @@ import type { ColumnDef } from "@/components/ui/data-table"
 import { ResourceSection } from "@/components/resource-section"
 import { ConversationsSection } from "@/components/conversations-section"
 import { useLookup, toLookupOptions } from "@/hooks/use-lookup"
-import { ArrowLeft, Building2, Save, CheckCircle2, XCircle } from "lucide-react"
+import { trustSafetyPath } from "@/lib/trust-safety"
+import { ArrowLeft, Building2, Save, CheckCircle2, XCircle, ShieldAlert } from "lucide-react"
 import { toast } from "sonner"
 
 interface EmployerDetail {
@@ -43,6 +44,8 @@ interface EmployerDetail {
   deleted_at?: string
   created_at?: string
   updated_at?: string
+  needs_review?: boolean
+  open_fraud_event_id?: string | null
 }
 
 const emptyProfile = {
@@ -65,6 +68,7 @@ const formatIDR = (value: number) =>
 
 export default function EmployerDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [profileForm, setProfileForm] = useState({ ...emptyProfile })
 
@@ -72,7 +76,11 @@ export default function EmployerDetailPage() {
     queryKey: ["employer", id],
     queryFn: async () => {
       const res = await apiClient.get(`/admin/employers/${id}`)
-      return res.data?.data || res.data
+      const detail = res.data?.data || res.data
+      return {
+        ...detail,
+        needs_review: Boolean(detail?.needs_review),
+      }
     },
     enabled: !!id,
   })
@@ -292,6 +300,19 @@ export default function EmployerDetailPage() {
                 {employer?.is_vip && (
                   <Badge className="bg-warning/10 text-warning border-transparent">VIP</Badge>
                 )}
+                {employer?.needs_review && (
+                  <button
+                    type="button"
+                    className="inline-flex"
+                    onClick={() => navigate(trustSafetyPath(employer.open_fraud_event_id))}
+                    title="Open related Trust & Safety event"
+                  >
+                    <Badge className="bg-warning/10 text-warning border-transparent gap-1 cursor-pointer hover:bg-warning/20">
+                      <ShieldAlert className="h-3 w-3" />
+                      Needs review
+                    </Badge>
+                  </button>
+                )}
               </h2>
               <p className="text-sm text-muted-foreground">
                 {employer?.user_email || "No linked account"}
@@ -318,6 +339,27 @@ export default function EmployerDetailPage() {
           )}
         </Button>
       </div>
+
+      {employer?.needs_review && (
+        <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm space-y-2">
+          <div className="flex items-center gap-2 font-medium text-warning">
+            <ShieldAlert className="h-4 w-4" />
+            Related Trust & Safety flag open
+          </div>
+          <p className="text-muted-foreground text-xs">
+            An open fraud event exists on this employer&apos;s user account, job post, or payment order.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="text-warning border-warning/40"
+            onClick={() => navigate(trustSafetyPath(employer.open_fraud_event_id))}
+          >
+            Resolve in Trust & Safety
+          </Button>
+        </div>
+      )}
 
       <Tabs defaultValue="profile">
         <TabsList className="flex-wrap h-auto">

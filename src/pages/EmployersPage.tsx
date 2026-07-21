@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
-import { Building2, CheckCircle2, XCircle, Edit2, Trash2 } from "lucide-react"
+import { Building2, CheckCircle2, XCircle, Edit2, Trash2, ShieldAlert } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
 import { buildListQueryParams } from "@/lib/list-query"
+import { trustSafetyPath } from "@/lib/trust-safety"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -41,6 +42,8 @@ interface Employer {
   website?: string
   user_email?: string
   user_username?: string
+  needs_review?: boolean
+  open_fraud_event_id?: string | null
 }
 
 interface PaginatedResponse {
@@ -56,8 +59,8 @@ interface PaginatedResponse {
 const ENCRYPTED_SEARCH_HINT =
   "Gunakan email/nama lengkap untuk hasil akurat (kolom sensitif terenkripsi)."
 
-const EMPLOYER_SORT_KEYS = ["created_at", "updated_at", "is_verified", "is_vip"]
-const EMPLOYER_FILTER_KEYS = ["is_verified", "industry_id", "deleted_state"]
+const EMPLOYER_SORT_KEYS = ["created_at", "updated_at", "is_verified", "is_vip", "needs_review"]
+const EMPLOYER_FILTER_KEYS = ["is_verified", "industry_id", "deleted_state", "needs_review"]
 
 export default function EmployersPage() {
   const queryClient = useQueryClient()
@@ -101,6 +104,15 @@ export default function EmployersPage() {
         ],
         getValue: (item: Employer) => (item.deleted_at ? "deleted" : "active"),
       },
+      {
+        key: "needs_review",
+        label: "Trust & Safety",
+        options: [
+          { value: "true", label: "Needs review only" },
+          { value: "false", label: "No open flags" },
+        ],
+        getValue: (item: Employer) => item.needs_review,
+      },
     ],
     [industryOptions]
   )
@@ -110,9 +122,11 @@ export default function EmployersPage() {
     { key: "is_vip", getValue: (item: Employer) => item.is_vip },
     { key: "created_at", getValue: (item: Employer) => item.created_at },
     { key: "updated_at", getValue: (item: Employer) => item.updated_at },
+    { key: "needs_review", getValue: (item: Employer) => item.needs_review },
   ]
 
   const verifiedParam = searchParams.get("is_verified")
+  const needsReviewParam = searchParams.get("needs_review")
   const tableControls = useTableControls({
     data: [],
     filters: employerFilters,
@@ -122,6 +136,9 @@ export default function EmployersPage() {
     defaultFilterValues: {
       ...(verifiedParam === "true" || verifiedParam === "false"
         ? { is_verified: verifiedParam }
+        : {}),
+      ...(needsReviewParam === "true" || needsReviewParam === "false"
+        ? { needs_review: needsReviewParam }
         : {}),
     },
     clientSide: false,
@@ -144,12 +161,20 @@ export default function EmployersPage() {
     queryKey: ["employers", listParams],
     queryFn: async () => {
       const res = await apiClient.get("/admin/employers", { params: listParams })
-      return res.data
+      const rows = (res.data?.data || []).map((employer: Employer) => ({
+        ...employer,
+        needs_review: Boolean(employer.needs_review),
+      }))
+      return { ...res.data, data: rows }
     },
   })
 
   const employers = response?.data || []
   const totalEmployers = getTotalFromMeta(response?.meta)
+
+  const goToTrustSafety = (eventId?: string | null) => {
+    navigate(trustSafetyPath(eventId))
+  }
 
   const verifyMutation = useMutation({
     mutationFn: async ({ id, is_verified }: { id: string, is_verified: boolean }) => {
@@ -190,12 +215,28 @@ export default function EmployersPage() {
             <Building2 className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground flex items-center gap-2">
+            <div className="font-medium text-foreground flex items-center gap-2 flex-wrap">
               {item.company_name || "Unknown Company"}
               {item.deleted_at && (
                 <Badge variant="outline" className="border-danger text-danger bg-danger/5 text-[10px] h-4 px-1">
                   Deleted
                 </Badge>
+              )}
+              {item.needs_review && (
+                <button
+                  type="button"
+                  className="inline-flex"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    goToTrustSafety(item.open_fraud_event_id)
+                  }}
+                  title="Open fraud on related user, job, or payment"
+                >
+                  <Badge className="bg-warning/10 text-warning border-transparent text-[10px] h-5 px-1.5 gap-1 cursor-pointer hover:bg-warning/20">
+                    <ShieldAlert className="h-3 w-3" />
+                    Needs review
+                  </Badge>
+                </button>
               )}
             </div>
             <div className="text-sm text-muted-foreground">{item.email || item.user_email || "No company email"}</div>
@@ -221,15 +262,26 @@ export default function EmployersPage() {
       sortKey: "is_verified",
       sortable: true,
       cell: (item) => (
-        <div className="flex gap-2">
-          <Badge 
-            variant={item.is_verified ? "default" : "secondary"}
-            className={item.is_verified ? "bg-success/10 text-success hover:bg-success/20 border-transparent" : "bg-warning/10 text-warning hover:bg-warning/20 border-transparent"}
-          >
-            {item.is_verified ? "Verified" : "Pending Verification"}
-          </Badge>
-          {item.is_vip && (
-            <Badge variant="outline" className="bg-background">VIP</Badge>
+        <div className="flex flex-col gap-1 items-start">
+          <div className="flex gap-2 flex-wrap">
+            <Badge
+              variant={item.is_verified ? "default" : "secondary"}
+              className={item.is_verified ? "bg-success/10 text-success hover:bg-success/20 border-transparent" : "bg-warning/10 text-warning hover:bg-warning/20 border-transparent"}
+            >
+              {item.is_verified ? "Verified" : "Pending Verification"}
+            </Badge>
+            {item.is_vip && (
+              <Badge variant="outline" className="bg-background">VIP</Badge>
+            )}
+          </div>
+          {item.needs_review && (
+            <button
+              type="button"
+              onClick={() => goToTrustSafety(item.open_fraud_event_id)}
+              className="text-[11px] text-warning hover:underline"
+            >
+              Related trust flag open
+            </button>
           )}
         </div>
       ),
