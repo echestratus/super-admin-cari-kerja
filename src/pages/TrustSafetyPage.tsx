@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -183,12 +184,29 @@ const RESOLVE_ACTIONS: {
 
 export default function TrustSafetyPage() {
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
   const pageSize = 15
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [resolveNote, setResolveNote] = useState("")
+
+  useEffect(() => {
+    const deepLinkId = searchParams.get("open_fraud_event_id")
+    if (deepLinkId) {
+      setResolveNote("")
+      setSelectedId(deepLinkId)
+    }
+  }, [searchParams])
+
+  const clearDeepLink = () => {
+    if (searchParams.has("open_fraud_event_id")) {
+      const next = new URLSearchParams(searchParams)
+      next.delete("open_fraud_event_id")
+      setSearchParams(next, { replace: true })
+    }
+  }
 
   const tableControls = useTableControls({
     data: [],
@@ -248,8 +266,10 @@ export default function TrustSafetyPage() {
       toast.success(body?.message || "Fraud event resolved successfully.")
       queryClient.invalidateQueries({ queryKey: ["fraud-events"] })
       queryClient.invalidateQueries({ queryKey: ["fraud-event", selectedId] })
+      queryClient.invalidateQueries({ queryKey: ["jobs"] })
       setResolveNote("")
       setSelectedId(null)
+      clearDeepLink()
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || "Failed to resolve fraud event.")
@@ -414,7 +434,15 @@ export default function TrustSafetyPage() {
         </CardContent>
       </Card>
 
-      <Sheet open={!!selectedId} onOpenChange={(open) => !open && setSelectedId(null)}>
+      <Sheet
+        open={!!selectedId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedId(null)
+            clearDeepLink()
+          }
+        }}
+      >
         <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Fraud event review</SheetTitle>

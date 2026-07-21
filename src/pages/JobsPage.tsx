@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -6,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
-import { Briefcase, CheckCircle2, XCircle, Archive, Edit2, Trash2 } from "lucide-react"
+import { Briefcase, CheckCircle2, XCircle, Archive, Edit2, Trash2, ShieldAlert } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
 import { buildListQueryParams } from "@/lib/list-query"
@@ -46,10 +47,18 @@ interface Job {
   deleted_at?: string
   salary?: number
   description?: string
+  needs_review?: boolean
+  open_fraud_event_id?: string | null
+  open_fraud_risk_score?: number | null
 }
 
 function getJobStatus(job: Job): string {
   return job.status_name || job.status || ""
+}
+
+function trustSafetyPath(eventId?: string | null) {
+  if (eventId) return `/trust-safety?open_fraud_event_id=${encodeURIComponent(eventId)}`
+  return "/trust-safety"
 }
 
 interface PaginatedResponse {
@@ -62,26 +71,39 @@ interface PaginatedResponse {
   }
 }
 
-const jobFilters: FilterDef[] = [{
-  key: "status",
-  label: "Status",
-  options: ["pending", "draft", "open", "approved", "active", "closed", "rejected", "archived"].map((value) => ({
-    value,
-    label: value.toUpperCase(),
-  })),
-  getValue: (item: Job) => getJobStatus(item).toLowerCase(),
-}]
+const jobFilters: FilterDef[] = [
+  {
+    key: "status",
+    label: "Status",
+    options: ["pending", "draft", "open", "approved", "active", "closed", "rejected", "archived"].map((value) => ({
+      value,
+      label: value.toUpperCase(),
+    })),
+    getValue: (item: Job) => getJobStatus(item).toLowerCase(),
+  },
+  {
+    key: "needs_review",
+    label: "Trust & Safety",
+    options: [
+      { value: "true", label: "Needs review" },
+      { value: "false", label: "No open flags" },
+    ],
+    getValue: (item: Job) => item.needs_review,
+  },
+]
 
 const jobSortFields: SortFieldDef[] = [
   { key: "title", getValue: (item: Job) => item.title },
   { key: "created_at", getValue: (item: Job) => item.created_at },
   { key: "updated_at", getValue: (item: Job) => item.updated_at },
+  { key: "needs_review", getValue: (item: Job) => item.needs_review },
 ]
 
-const JOB_SORT_KEYS = ["created_at", "updated_at", "title"]
-const JOB_FILTER_KEYS = ["status"]
+const JOB_SORT_KEYS = ["created_at", "updated_at", "title", "needs_review"]
+const JOB_FILTER_KEYS = ["status", "needs_review"]
 
 export default function JobsPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
@@ -128,6 +150,7 @@ export default function JobsPage() {
         ...job,
         status_name: getJobStatus(job),
         status: getJobStatus(job),
+        needs_review: Boolean(job.needs_review),
       }))
       return { ...res.data, data: rows }
     },
@@ -135,6 +158,41 @@ export default function JobsPage() {
 
   const jobs = response?.data || []
   const totalJobs = getTotalFromMeta(response?.meta)
+
+  const handleEditClick = async (job: Job) => {
+    setEditingJob(job)
+    setFormData({
+      title: job.title || "",
+      status_name: getJobStatus(job),
+      salary: job.salary?.toString() || "",
+      description: job.description || "",
+    })
+    try {
+      const res = await apiClient.get(`/admin/jobs/${job.id}`)
+      const detail = (res.data?.data || res.data) as Job
+      if (detail?.id) {
+        setEditingJob({
+          ...job,
+          ...detail,
+          status_name: getJobStatus(detail),
+          status: getJobStatus(detail),
+          needs_review: Boolean(detail.needs_review),
+        })
+        setFormData({
+          title: detail.title || job.title || "",
+          status_name: getJobStatus(detail) || getJobStatus(job),
+          salary: detail.salary?.toString() || job.salary?.toString() || "",
+          description: detail.description || job.description || "",
+        })
+      }
+    } catch {
+      // Keep list row data if detail fetch fails.
+    }
+  }
+
+  const goToTrustSafety = (eventId?: string | null) => {
+    navigate(trustSafetyPath(eventId))
+  }
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string, status: string }) => {
@@ -179,16 +237,6 @@ export default function JobsPage() {
     }
   })
 
-  const handleEditClick = (job: Job) => {
-    setEditingJob(job)
-    setFormData({
-      title: job.title || "",
-      status_name: getJobStatus(job),
-      salary: job.salary?.toString() || "",
-      description: job.description || "",
-    })
-  }
-
   const columns: ColumnDef<Job>[] = [
     {
       header: "Job Details",
@@ -200,12 +248,28 @@ export default function JobsPage() {
             <Briefcase className="h-4 w-4" />
           </div>
           <div>
-            <div className="font-medium text-foreground flex items-center gap-2">
+            <div className="font-medium text-foreground flex items-center gap-2 flex-wrap">
               {item.title || "Untitled Job"}
               {item.deleted_at && (
                 <Badge variant="outline" className="border-danger text-danger bg-danger/5 text-[10px] h-4 px-1">
                   Deleted
                 </Badge>
+              )}
+              {item.needs_review && (
+                <button
+                  type="button"
+                  className="inline-flex"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    goToTrustSafety(item.open_fraud_event_id)
+                  }}
+                  title="Open Trust & Safety queue"
+                >
+                  <Badge className="bg-warning/10 text-warning border-transparent text-[10px] h-5 px-1.5 gap-1 cursor-pointer hover:bg-warning/20">
+                    <ShieldAlert className="h-3 w-3" />
+                    Needs review
+                  </Badge>
+                </button>
               )}
             </div>
             <div className="text-sm text-muted-foreground">{item.company_name || "Unknown Company"}</div>
@@ -245,9 +309,20 @@ export default function JobsPage() {
         }
 
         return (
-          <Badge variant={variant} className={className}>
-            {status || "UNKNOWN"}
-          </Badge>
+          <div className="flex flex-col gap-1 items-start">
+            <Badge variant={variant} className={className}>
+              {status || "UNKNOWN"}
+            </Badge>
+            {item.needs_review && (
+              <button
+                type="button"
+                onClick={() => goToTrustSafety(item.open_fraud_event_id)}
+                className="text-[11px] text-warning hover:underline"
+              >
+                Trust flag open
+              </button>
+            )}
+          </div>
         )
       },
     },
@@ -382,6 +457,30 @@ export default function JobsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {editingJob?.needs_review && (
+              <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm space-y-2">
+                <div className="flex items-center gap-2 font-medium text-warning">
+                  <ShieldAlert className="h-4 w-4" />
+                  Needs Trust & Safety review
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  This job has an open fraud flag. Resolve it in the Trust & Safety queue before treating it as fully moderated.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-warning border-warning/40"
+                  onClick={() => {
+                    const eventId = editingJob.open_fraud_event_id
+                    setEditingJob(null)
+                    goToTrustSafety(eventId)
+                  }}
+                >
+                  Resolve in Trust & Safety
+                </Button>
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="title">Job Title</Label>
               <Input
