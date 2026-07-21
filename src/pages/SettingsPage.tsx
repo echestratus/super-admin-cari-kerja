@@ -20,6 +20,14 @@ interface SystemSettings {
   lang?: string
 }
 
+function coerceBool(value: unknown, fallback = false): boolean {
+  if (typeof value === "boolean") return value
+  if (typeof value === "string") return value === "true" || value === "1"
+  if (typeof value === "number") return value === 1
+  if (value == null) return fallback
+  return Boolean(value)
+}
+
 export default function SettingsPage() {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState<SystemSettings>({
@@ -47,9 +55,12 @@ export default function SettingsPage() {
         ...prev,
         platform_name: settings.platform_name || prev.platform_name,
         support_email: settings.support_email || prev.support_email,
-        maintenance_mode: settings.maintenance_mode ?? prev.maintenance_mode,
+        maintenance_mode: coerceBool(settings.maintenance_mode, prev.maintenance_mode),
         max_upload_size_mb: settings.max_upload_size_mb || prev.max_upload_size_mb,
-        allow_employer_registration: settings.allow_employer_registration ?? prev.allow_employer_registration
+        allow_employer_registration: coerceBool(
+          settings.allow_employer_registration,
+          prev.allow_employer_registration
+        ),
       }))
     }
   }, [settings])
@@ -59,9 +70,9 @@ export default function SettingsPage() {
       const payload = {
         platform_name: newSettings.platform_name,
         support_email: newSettings.support_email,
-        maintenance_mode: newSettings.maintenance_mode,
+        maintenance_mode: Boolean(newSettings.maintenance_mode),
         max_upload_size_mb: newSettings.max_upload_size_mb,
-        allow_employer_registration: newSettings.allow_employer_registration
+        allow_employer_registration: Boolean(newSettings.allow_employer_registration),
       }
       await apiClient.put("/admin/settings", payload)
     },
