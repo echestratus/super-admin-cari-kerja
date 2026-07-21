@@ -57,7 +57,7 @@ function getJobStatus(job: Job): string {
 }
 
 function trustSafetyPath(eventId?: string | null) {
-  if (eventId) return `/trust-safety?open_fraud_event_id=${encodeURIComponent(eventId)}`
+  if (eventId) return `/trust-safety?eventId=${encodeURIComponent(eventId)}`
   return "/trust-safety"
 }
 
@@ -85,7 +85,7 @@ const jobFilters: FilterDef[] = [
     key: "needs_review",
     label: "Trust & Safety",
     options: [
-      { value: "true", label: "Needs review" },
+      { value: "true", label: "Needs review only" },
       { value: "false", label: "No open flags" },
     ],
     getValue: (item: Job) => item.needs_review,
