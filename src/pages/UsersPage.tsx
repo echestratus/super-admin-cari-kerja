@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { DataTable } from "@/components/ui/data-table"
 import type { ColumnDef } from "@/components/ui/data-table"
-import { ShieldBan, CheckCircle2, Edit2, Trash2 } from "lucide-react"
+import { ShieldBan, CheckCircle2, Edit2, Trash2, ShieldAlert } from "lucide-react"
 import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
 import { buildListQueryParams } from "@/lib/list-query"
+import { trustSafetyPath } from "@/lib/trust-safety"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -45,6 +46,8 @@ interface User {
   created_at?: string
   updated_at?: string
   deleted_at?: string
+  needs_review?: boolean
+  open_fraud_event_id?: string | null
 }
 
 interface PaginatedResponse {
@@ -91,6 +94,15 @@ const userFilters: FilterDef[] = [
     ],
     getValue: (item: User) => (item.deleted_at ? "deleted" : "active"),
   },
+  {
+    key: "needs_review",
+    label: "Trust & Safety",
+    options: [
+      { value: "true", label: "Needs review only" },
+      { value: "false", label: "No open flags" },
+    ],
+    getValue: (item: User) => item.needs_review,
+  },
 ]
 
 const userSortFields: SortFieldDef[] = [
@@ -98,13 +110,15 @@ const userSortFields: SortFieldDef[] = [
   { key: "is_suspended", getValue: (item: User) => item.is_suspended },
   { key: "created_at", getValue: (item: User) => item.created_at },
   { key: "updated_at", getValue: (item: User) => item.updated_at },
+  { key: "needs_review", getValue: (item: User) => item.needs_review },
 ]
 
-const USER_SORT_KEYS = ["created_at", "updated_at", "role_id", "is_suspended"]
-const USER_FILTER_KEYS = ["role_id", "is_suspended", "deleted_state"]
+const USER_SORT_KEYS = ["created_at", "updated_at", "role_id", "is_suspended", "needs_review"]
+const USER_FILTER_KEYS = ["role_id", "is_suspended", "deleted_state", "needs_review"]
 
 export default function UsersPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
@@ -124,6 +138,7 @@ export default function UsersPage() {
   })
 
   const suspendedParam = searchParams.get("is_suspended")
+  const needsReviewParam = searchParams.get("needs_review")
   const tableControls = useTableControls({
     data: [],
     filters: userFilters,
@@ -133,6 +148,9 @@ export default function UsersPage() {
     defaultFilterValues: {
       ...(suspendedParam === "true" || suspendedParam === "false"
         ? { is_suspended: suspendedParam }
+        : {}),
+      ...(needsReviewParam === "true" || needsReviewParam === "false"
+        ? { needs_review: needsReviewParam }
         : {}),
     },
     clientSide: false,
@@ -155,12 +173,20 @@ export default function UsersPage() {
     queryKey: ["users", listParams],
     queryFn: async () => {
       const res = await apiClient.get("/admin/users", { params: listParams })
-      return res.data
+      const rows = (res.data?.data || []).map((user: User) => ({
+        ...user,
+        needs_review: Boolean(user.needs_review),
+      }))
+      return { ...res.data, data: rows }
     },
   })
 
   const users = response?.data || []
   const totalUsers = getTotalFromMeta(response?.meta)
+
+  const goToTrustSafety = (eventId?: string | null) => {
+    navigate(trustSafetyPath(eventId))
+  }
 
   const statusMutation = useMutation({
     mutationFn: async ({ id, is_suspended }: { id: string, is_suspended: boolean }) => {
@@ -230,7 +256,25 @@ export default function UsersPage() {
             {item.username ? item.username.charAt(0).toUpperCase() : "U"}
           </div>
           <div>
-            <div className="font-medium text-foreground">{item.username || "Unknown User"}</div>
+            <div className="font-medium text-foreground flex items-center gap-2 flex-wrap">
+              {item.username || "Unknown User"}
+              {item.needs_review && (
+                <button
+                  type="button"
+                  className="inline-flex"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    goToTrustSafety(item.open_fraud_event_id)
+                  }}
+                  title="Open Trust & Safety queue"
+                >
+                  <Badge className="bg-warning/10 text-warning border-transparent text-[10px] h-5 px-1.5 gap-1 cursor-pointer hover:bg-warning/20">
+                    <ShieldAlert className="h-3 w-3" />
+                    Needs review
+                  </Badge>
+                </button>
+              )}
+            </div>
             <div className="text-sm text-muted-foreground">{item.email}</div>
           </div>
         </div>
@@ -251,17 +295,28 @@ export default function UsersPage() {
       sortKey: "is_suspended",
       sortable: true,
       cell: (item) => (
-        <div className="flex gap-2">
-          <Badge 
-            variant={!item.is_suspended ? "default" : "destructive"}
-            className={!item.is_suspended ? "bg-success/10 text-success hover:bg-success/20 border-transparent" : "bg-danger/10 text-danger hover:bg-danger/20 border-transparent"}
-          >
-            {!item.is_suspended ? "Active" : "Suspended"}
-          </Badge>
-          {item.deleted_at && (
-            <Badge variant="outline" className="border-danger text-danger bg-danger/5">
-              Deleted
+        <div className="flex flex-col gap-1 items-start">
+          <div className="flex gap-2 flex-wrap">
+            <Badge
+              variant={!item.is_suspended ? "default" : "destructive"}
+              className={!item.is_suspended ? "bg-success/10 text-success hover:bg-success/20 border-transparent" : "bg-danger/10 text-danger hover:bg-danger/20 border-transparent"}
+            >
+              {!item.is_suspended ? "Active" : "Suspended"}
             </Badge>
+            {item.deleted_at && (
+              <Badge variant="outline" className="border-danger text-danger bg-danger/5">
+                Deleted
+              </Badge>
+            )}
+          </div>
+          {item.needs_review && (
+            <button
+              type="button"
+              onClick={() => goToTrustSafety(item.open_fraud_event_id)}
+              className="text-[11px] text-warning hover:underline"
+            >
+              Trust flag open
+            </button>
           )}
         </div>
       ),
@@ -379,6 +434,30 @@ export default function UsersPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            {editingUser?.needs_review && (
+              <div className="rounded-md border border-warning/40 bg-warning/5 p-3 text-sm space-y-2">
+                <div className="flex items-center gap-2 font-medium text-warning">
+                  <ShieldAlert className="h-4 w-4" />
+                  Needs Trust & Safety review
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  This user has an open fraud flag. Resolve it in the Trust & Safety queue.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-warning border-warning/40"
+                  onClick={() => {
+                    const eventId = editingUser.open_fraud_event_id
+                    setEditingUser(null)
+                    goToTrustSafety(eventId)
+                  }}
+                >
+                  Resolve in Trust & Safety
+                </Button>
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="username">Username</Label>
               <Input
