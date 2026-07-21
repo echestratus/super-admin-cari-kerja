@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 import { Button } from "@/components/ui/button"
@@ -62,6 +62,7 @@ const EMPLOYER_FILTER_KEYS = ["is_verified", "industry_id", "deleted_state"]
 export default function EmployersPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 500)
   const [page, setPage] = useState(1)
@@ -111,12 +112,18 @@ export default function EmployersPage() {
     { key: "updated_at", getValue: (item: Employer) => item.updated_at },
   ]
 
+  const verifiedParam = searchParams.get("is_verified")
   const tableControls = useTableControls({
     data: [],
     filters: employerFilters,
     sortFields: employerSortFields,
     defaultSortBy: "created_at",
     defaultSortOrder: "desc",
+    defaultFilterValues: {
+      ...(verifiedParam === "true" || verifiedParam === "false"
+        ? { is_verified: verifiedParam }
+        : {}),
+    },
     clientSide: false,
   })
 

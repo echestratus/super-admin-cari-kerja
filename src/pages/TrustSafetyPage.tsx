@@ -282,7 +282,13 @@ export default function TrustSafetyPage() {
     sortFields: fraudSortFields,
     defaultSortBy: "risk_score",
     defaultSortOrder: "desc",
-    defaultFilterValues: { status: "open" },
+    defaultFilterValues: {
+      status: searchParams.get("status") || "open",
+      ...(searchParams.get("source") ? { source: searchParams.get("source")! } : {}),
+      ...(searchParams.get("entity_type")
+        ? { entity_type: searchParams.get("entity_type")! }
+        : {}),
+    },
     clientSide: false,
   })
 
