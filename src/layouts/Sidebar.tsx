@@ -13,6 +13,7 @@ import {
   CreditCard,
   Receipt,
   ShieldAlert,
+  BadgeCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -21,6 +22,7 @@ export const navItems = [
   { icon: Users, label: "Users", href: "/users" },
   { icon: UserSquare2, label: "Workers", href: "/workers" },
   { icon: Building2, label: "Employers", href: "/employers" },
+  { icon: BadgeCheck, label: "Employer Verification", href: "/employer-verification" },
   { icon: Briefcase, label: "Jobs", href: "/jobs" },
   { icon: FileText, label: "Applications", href: "/applications" },
   { icon: ShieldAlert, label: "Trust & Safety", href: "/trust-safety" },
