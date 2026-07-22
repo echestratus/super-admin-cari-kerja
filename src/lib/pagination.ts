@@ -1,7 +1,7 @@
 /** Normalize admin list pagination meta across camelCase and snake_case shapes. */
 export function getTotalFromMeta(meta?: Record<string, any> | null): number {
   if (!meta) return 0
-  return Number(meta.total_data ?? meta.totalData ?? 0)
+  return Number(meta.total_data ?? meta.totalData ?? meta.total ?? 0)
 }
 
 export function getPageFromMeta(meta?: Record<string, any> | null, fallback = 1): number {

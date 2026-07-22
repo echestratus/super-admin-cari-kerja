@@ -15,6 +15,8 @@ interface SystemSettings {
   maintenance_mode: boolean
   max_upload_size_mb: number
   allow_employer_registration: boolean
+  employer_verification_grace_days: number
+  employer_verification_auto_block: boolean
   // frontend only state
   timezone?: string
   lang?: string
@@ -28,6 +30,11 @@ function coerceBool(value: unknown, fallback = false): boolean {
   return Boolean(value)
 }
 
+function coerceInt(value: unknown, fallback: number): number {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
 export default function SettingsPage() {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState<SystemSettings>({
@@ -36,6 +43,8 @@ export default function SettingsPage() {
     maintenance_mode: false,
     max_upload_size_mb: 5,
     allow_employer_registration: true,
+    employer_verification_grace_days: 7,
+    employer_verification_auto_block: true,
     timezone: "Asia/Jakarta",
     lang: "id"
   })
@@ -61,6 +70,14 @@ export default function SettingsPage() {
           settings.allow_employer_registration,
           prev.allow_employer_registration
         ),
+        employer_verification_grace_days: coerceInt(
+          settings.employer_verification_grace_days,
+          prev.employer_verification_grace_days
+        ),
+        employer_verification_auto_block: coerceBool(
+          settings.employer_verification_auto_block,
+          prev.employer_verification_auto_block
+        ),
       }))
     }
   }, [settings])
@@ -73,6 +90,8 @@ export default function SettingsPage() {
         maintenance_mode: Boolean(newSettings.maintenance_mode),
         max_upload_size_mb: newSettings.max_upload_size_mb,
         allow_employer_registration: Boolean(newSettings.allow_employer_registration),
+        employer_verification_grace_days: Number(newSettings.employer_verification_grace_days),
+        employer_verification_auto_block: Boolean(newSettings.employer_verification_auto_block),
       }
       await apiClient.put("/admin/settings", payload)
     },
@@ -205,6 +224,49 @@ export default function SettingsPage() {
                         style={{ right: formData.maintenance_mode ? '0' : '1rem' }}
                       />
                       <label htmlFor="maintenance_mode" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${formData.maintenance_mode ? 'bg-danger' : 'bg-muted'}`}></label>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 p-4 border rounded-lg bg-card">
+                    <Label htmlFor="employer_verification_grace_days">Employer verification grace days</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Days before unverified employers are auto-blocked when auto-block is on (1–90).
+                    </p>
+                    <Input
+                      id="employer_verification_grace_days"
+                      name="employer_verification_grace_days"
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={formData.employer_verification_grace_days}
+                      onChange={handleChange}
+                      className="max-w-[140px]"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
+                    <div className="space-y-0.5">
+                      <Label className="text-base">Auto-block incomplete verification</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Scheduler suspends employers past grace if verification is incomplete.
+                      </p>
+                    </div>
+                    <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                      <input
+                        type="checkbox"
+                        name="employer_verification_auto_block"
+                        id="employer_verification_auto_block"
+                        checked={formData.employer_verification_auto_block}
+                        onChange={handleChange}
+                        className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-primary checked:right-0 checked:border-primary duration-200"
+                        style={{ right: formData.employer_verification_auto_block ? "0" : "1rem" }}
+                      />
+                      <label
+                        htmlFor="employer_verification_auto_block"
+                        className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${
+                          formData.employer_verification_auto_block ? "bg-primary" : "bg-muted"
+                        }`}
+                      ></label>
                     </div>
                   </div>
                 </div>
