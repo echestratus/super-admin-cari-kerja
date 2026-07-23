@@ -49,6 +49,7 @@ import { useDebounce } from "@/hooks/use-debounce"
 import { getTotalFromMeta } from "@/lib/pagination"
 import { resolveUploadUrl } from "@/lib/uploads"
 import { cn } from "@/lib/utils"
+import { RichTextEditor, isRichTextEmpty } from "@/components/rich-text-editor"
 
 type NewsStatus = "draft" | "published" | "archived" | string
 
@@ -249,7 +250,7 @@ export default function NewsPage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const payload = toNewsPayload(formData)
-      if (!payload.title || !payload.body?.trim()) {
+      if (!payload.title || isRichTextEmpty(payload.body)) {
         throw new Error("Title and body are required.")
       }
       let news: NewsItem
@@ -483,6 +484,8 @@ export default function NewsPage() {
     },
   ]
 
+  const bodyValid = !isRichTextEmpty(formData.body)
+
   const busy =
     saveMutation.isPending || publishMutation.isPending || archiveMutation.isPending
 
@@ -605,7 +608,7 @@ export default function NewsPage() {
           <DialogHeader>
             <DialogTitle>{editingNews ? "Edit article" : "New article"}</DialogTitle>
             <DialogDescription>
-              Title and HTML body are required. Slug is optional (auto-generated from title).
+              Title and body are required. Slug is optional (auto-generated from title).
             </DialogDescription>
           </DialogHeader>
 
@@ -686,14 +689,13 @@ export default function NewsPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="news-body">Body (HTML)</Label>
-              <Textarea
-                id="news-body"
-                rows={10}
-                className="font-mono text-xs"
+              <Label>Body</Label>
+              <RichTextEditor
+                key={editingNews?.id || "new"}
                 value={formData.body}
-                onChange={(e) => setFormData({ ...formData, body: e.target.value })}
-                placeholder="<p>Article content...</p>"
+                onChange={(html) => setFormData({ ...formData, body: html })}
+                placeholder="Write the article content…"
+                disabled={busy}
               />
             </div>
 
@@ -759,7 +761,7 @@ export default function NewsPage() {
                   type="button"
                   variant="outline"
                   className="text-success"
-                  disabled={busy || !formData.title.trim() || !formData.body.trim()}
+                  disabled={busy || !formData.title.trim() || !bodyValid}
                   onClick={() => publishMutation.mutate(editingNews.id)}
                 >
                   <Send className="h-4 w-4 mr-2" />
@@ -782,7 +784,7 @@ export default function NewsPage() {
                   type="button"
                   variant="outline"
                   className="text-success"
-                  disabled={busy || !formData.title.trim() || !formData.body.trim()}
+                  disabled={busy || !formData.title.trim() || !bodyValid}
                   onClick={() => publishMutation.mutate(editingNews.id)}
                 >
                   <Send className="h-4 w-4 mr-2" />
@@ -795,7 +797,7 @@ export default function NewsPage() {
                 Close
               </Button>
               <Button
-                disabled={busy || !formData.title.trim() || !formData.body.trim()}
+                disabled={busy || !formData.title.trim() || !bodyValid}
                 onClick={() => saveMutation.mutate()}
               >
                 {saveMutation.isPending
