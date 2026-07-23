@@ -18,6 +18,7 @@ import ApplicationsPage from "./pages/ApplicationsPage"
 import TrustSafetyPage from "./pages/TrustSafetyPage"
 import SettingsPage from "./pages/SettingsPage"
 import EmployerVerificationPage from "./pages/EmployerVerificationPage"
+import NewsPage from "./pages/NewsPage"
 import ProtectedRoute from "./components/ProtectedRoute"
 
 function App() {
@@ -43,6 +44,7 @@ function App() {
             <Route path="payment-orders" element={<PaymentOrdersPage />} />
             <Route path="trust-safety" element={<TrustSafetyPage />} />
             <Route path="employer-verification" element={<EmployerVerificationPage />} />
+            <Route path="news" element={<NewsPage />} />
             <Route path="audit-logs" element={<AuditLogsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

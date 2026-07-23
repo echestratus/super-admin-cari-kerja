@@ -14,6 +14,7 @@ import {
   Receipt,
   ShieldAlert,
   BadgeCheck,
+  Newspaper,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -25,6 +26,7 @@ export const navItems = [
   { icon: BadgeCheck, label: "Employer Verification", href: "/employer-verification" },
   { icon: Briefcase, label: "Jobs", href: "/jobs" },
   { icon: FileText, label: "Applications", href: "/applications" },
+  { icon: Newspaper, label: "News", href: "/news" },
   { icon: ShieldAlert, label: "Trust & Safety", href: "/trust-safety" },
   { icon: CreditCard, label: "Plans", href: "/plans" },
   { icon: Receipt, label: "Payments", href: "/payment-orders" },
