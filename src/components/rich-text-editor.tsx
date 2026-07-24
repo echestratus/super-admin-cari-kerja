@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Link from "@tiptap/extension-link"
@@ -35,9 +35,12 @@ import {
   Highlighter,
   ImageIcon,
   Pilcrow,
+  Eye,
+  Pencil,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { RICH_TEXT_CONTENT_CLASS, RichTextContent } from "@/components/rich-text-content"
 
 interface RichTextEditorProps {
   value: string
@@ -109,52 +112,31 @@ export function RichTextEditor({
   disabled = false,
   className,
 }: RichTextEditorProps) {
+  const [mode, setMode] = useState<"edit" | "preview">("edit")
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
-        bulletList: {
-          HTMLAttributes: { class: "list-disc pl-6 my-2" },
-        },
-        orderedList: {
-          HTMLAttributes: { class: "list-decimal pl-6 my-2" },
-        },
-        blockquote: {
-          HTMLAttributes: {
-            class: "border-l-4 border-muted-foreground/40 pl-4 italic my-2 text-muted-foreground",
-          },
-        },
-        code: {
-          HTMLAttributes: {
-            class: "rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]",
-          },
-        },
-        codeBlock: {
-          HTMLAttributes: {
-            class: "rounded-md bg-muted p-3 font-mono text-sm my-2 overflow-x-auto",
-          },
-        },
-        horizontalRule: {
-          HTMLAttributes: { class: "my-4 border-t border-border" },
-        },
+        // Keep saved HTML semantic — visual styles come from `.rich-text-content` CSS
+        // so edit view matches published/preview view.
       }),
       Underline,
       TextStyle,
       Color,
-      Highlight.configure({
-        multicolor: false,
-        HTMLAttributes: { class: "bg-yellow-200/80 rounded px-0.5" },
-      }),
+      Highlight.configure({ multicolor: false }),
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
       Link.configure({
         openOnClick: false,
-        HTMLAttributes: { class: "text-primary underline underline-offset-2" },
+        HTMLAttributes: {
+          rel: "noopener noreferrer",
+          target: "_blank",
+        },
       }),
       Image.configure({
         allowBase64: false,
-        HTMLAttributes: { class: "max-w-full h-auto rounded-md my-2" },
       }),
       Typography,
       Placeholder.configure({ placeholder }),
@@ -167,12 +149,14 @@ export function RichTextEditor({
     editorProps: {
       attributes: {
         class: cn(
-          "tiptap-editor min-h-[260px] max-h-[520px] overflow-y-auto px-3 py-2 focus:outline-none",
+          RICH_TEXT_CONTENT_CLASS,
+          "tiptap-editor min-h-[260px] max-h-[520px] overflow-y-auto px-1 py-1 focus:outline-none",
           "[&_p.is-editor-empty:first-child::before]:text-muted-foreground",
           "[&_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]",
           "[&_p.is-editor-empty:first-child::before]:float-left",
           "[&_p.is-editor-empty:first-child::before]:h-0",
-          "[&_p.is-editor-empty:first-child::before]:pointer-events-none"
+          "[&_p.is-editor-empty:first-child::before]:pointer-events-none",
+          "[&_p.is-editor-empty:first-child::before]:italic"
         ),
       },
     },
@@ -180,8 +164,8 @@ export function RichTextEditor({
 
   useEffect(() => {
     if (!editor) return
-    editor.setEditable(!disabled)
-  }, [editor, disabled])
+    editor.setEditable(!disabled && mode === "edit")
+  }, [editor, disabled, mode])
 
   useEffect(() => {
     if (!editor) return
@@ -216,12 +200,39 @@ export function RichTextEditor({
     )
   }
 
+  const toolbarDisabled = disabled || mode === "preview"
+
   return (
     <div className={cn("rounded-md border bg-background overflow-hidden", className)}>
       <div className="flex flex-wrap items-center gap-0.5 border-b bg-muted/30 px-1 py-1">
+        <div className="mr-1 flex items-center rounded-md border bg-background p-0.5">
+          <Button
+            type="button"
+            variant={mode === "edit" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => setMode("edit")}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </Button>
+          <Button
+            type="button"
+            variant={mode === "preview" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 gap-1 px-2 text-xs"
+            onClick={() => setMode("preview")}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Preview
+          </Button>
+        </div>
+
+        <ToolbarDivider />
+
         <ToolbarButton
           active={editor.isActive("paragraph")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Paragraph"
           onClick={() => editor.chain().focus().setParagraph().run()}
         >
@@ -229,7 +240,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("heading", { level: 1 })}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Heading 1"
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
         >
@@ -237,7 +248,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("heading", { level: 2 })}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Heading 2"
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         >
@@ -245,7 +256,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("heading", { level: 3 })}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Heading 3"
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         >
@@ -256,7 +267,7 @@ export function RichTextEditor({
 
         <ToolbarButton
           active={editor.isActive("bold")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Bold"
           onClick={() => editor.chain().focus().toggleBold().run()}
         >
@@ -264,7 +275,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("italic")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Italic"
           onClick={() => editor.chain().focus().toggleItalic().run()}
         >
@@ -272,7 +283,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("underline")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Underline"
           onClick={() => editor.chain().focus().toggleUnderline().run()}
         >
@@ -280,7 +291,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("strike")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Strikethrough"
           onClick={() => editor.chain().focus().toggleStrike().run()}
         >
@@ -288,7 +299,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("highlight")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Highlight"
           onClick={() => editor.chain().focus().toggleHighlight().run()}
         >
@@ -296,7 +307,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("code")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Inline code"
           onClick={() => editor.chain().focus().toggleCode().run()}
         >
@@ -306,7 +317,7 @@ export function RichTextEditor({
         <label
           className={cn(
             "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
-            disabled ? "opacity-50 pointer-events-none" : "hover:bg-accent cursor-pointer"
+            toolbarDisabled ? "opacity-50 pointer-events-none" : "hover:bg-accent cursor-pointer"
           )}
           title="Text color"
         >
@@ -320,7 +331,7 @@ export function RichTextEditor({
           <input
             type="color"
             className="sr-only"
-            disabled={disabled}
+            disabled={toolbarDisabled}
             value={
               (editor.getAttributes("textStyle").color as string | undefined)?.startsWith("#")
                 ? (editor.getAttributes("textStyle").color as string)
@@ -331,7 +342,7 @@ export function RichTextEditor({
         </label>
         <select
           className="h-8 max-w-[7.5rem] rounded-md border border-transparent bg-transparent px-1 text-xs hover:bg-accent disabled:opacity-50"
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Text color preset"
           value={(editor.getAttributes("textStyle").color as string | undefined) || ""}
           onMouseDown={(e) => e.stopPropagation()}
@@ -355,7 +366,7 @@ export function RichTextEditor({
 
         <ToolbarButton
           active={editor.isActive({ textAlign: "left" })}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Align left"
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
         >
@@ -363,7 +374,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive({ textAlign: "center" })}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Align center"
           onClick={() => editor.chain().focus().setTextAlign("center").run()}
         >
@@ -371,7 +382,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive({ textAlign: "right" })}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Align right"
           onClick={() => editor.chain().focus().setTextAlign("right").run()}
         >
@@ -379,7 +390,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive({ textAlign: "justify" })}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Justify"
           onClick={() => editor.chain().focus().setTextAlign("justify").run()}
         >
@@ -390,7 +401,7 @@ export function RichTextEditor({
 
         <ToolbarButton
           active={editor.isActive("bulletList")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Bullet list"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
         >
@@ -398,7 +409,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("orderedList")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Numbered list"
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
         >
@@ -406,7 +417,7 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("blockquote")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Quote"
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
         >
@@ -414,14 +425,14 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("codeBlock")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Code block"
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
         >
           <Code2 className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Horizontal rule"
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
         >
@@ -429,41 +440,50 @@ export function RichTextEditor({
         </ToolbarButton>
         <ToolbarButton
           active={editor.isActive("link")}
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Link"
           onClick={setLink}
         >
           <Link2 className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton disabled={disabled} title="Insert image" onClick={setImage}>
+        <ToolbarButton disabled={toolbarDisabled} title="Insert image" onClick={setImage}>
           <ImageIcon className="h-4 w-4" />
         </ToolbarButton>
 
         <ToolbarDivider />
 
         <ToolbarButton
-          disabled={disabled}
+          disabled={toolbarDisabled}
           title="Clear formatting"
           onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
         >
           <RemoveFormatting className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
-          disabled={disabled || !editor.can().chain().focus().undo().run()}
+          disabled={toolbarDisabled || !editor.can().chain().focus().undo().run()}
           title="Undo"
           onClick={() => editor.chain().focus().undo().run()}
         >
           <Undo2 className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
-          disabled={disabled || !editor.can().chain().focus().redo().run()}
+          disabled={toolbarDisabled || !editor.can().chain().focus().redo().run()}
           title="Redo"
           onClick={() => editor.chain().focus().redo().run()}
         >
           <Redo2 className="h-4 w-4" />
         </ToolbarButton>
       </div>
-      <EditorContent editor={editor} />
+
+      {mode === "preview" ? (
+        <div className="min-h-[260px] max-h-[520px] overflow-y-auto bg-white px-4 py-3">
+          <RichTextContent html={value} />
+        </div>
+      ) : (
+        <div className="bg-white px-3 py-2">
+          <EditorContent editor={editor} />
+        </div>
+      )}
     </div>
   )
 }
