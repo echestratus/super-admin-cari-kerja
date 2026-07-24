@@ -52,11 +52,30 @@ import { cn } from "@/lib/utils"
 import { RichTextEditor, isRichTextEmpty } from "@/components/rich-text-editor"
 
 type NewsStatus = "draft" | "published" | "archived" | string
+type LocaleCode = "id" | "en"
+
+interface LocaleContent {
+  title: string
+  slug: string
+  excerpt: string
+  body: string
+  meta_title: string
+  meta_description: string
+}
+
+interface NewsTranslations {
+  id?: Partial<LocaleContent> | null
+  en?: Partial<LocaleContent> | null
+}
 
 interface NewsCategory {
   id: string
   name: string
   slug: string
+  translations?: {
+    id?: { name?: string; slug?: string }
+    en?: { name?: string; slug?: string }
+  }
   created_at?: string
   updated_at?: string
 }
@@ -79,29 +98,43 @@ interface NewsItem {
   published_at?: string | null
   created_at?: string
   updated_at?: string
+  translations?: NewsTranslations
 }
 
 interface NewsFormState {
-  title: string
-  slug: string
-  excerpt: string
-  body: string
   category_id: string
   is_featured: boolean
-  meta_title: string
-  meta_description: string
+  translations: Record<LocaleCode, LocaleContent>
 }
 
-const emptyNewsForm: NewsFormState = {
+interface CategoryFormState {
+  translations: Record<LocaleCode, { name: string; slug: string }>
+}
+
+const emptyLocaleContent = (): LocaleContent => ({
   title: "",
   slug: "",
   excerpt: "",
   body: "",
-  category_id: "none",
-  is_featured: false,
   meta_title: "",
   meta_description: "",
-}
+})
+
+const emptyNewsForm = (): NewsFormState => ({
+  category_id: "none",
+  is_featured: false,
+  translations: {
+    id: emptyLocaleContent(),
+    en: emptyLocaleContent(),
+  },
+})
+
+const emptyCategoryForm = (): CategoryFormState => ({
+  translations: {
+    id: { name: "", slug: "" },
+    en: { name: "", slug: "" },
+  },
+})
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
@@ -110,23 +143,108 @@ const STATUS_OPTIONS = [
   { value: "archived", label: "Archived" },
 ]
 
+const LIST_LOCALE_OPTIONS: { value: LocaleCode; label: string }[] = [
+  { value: "id", label: "Bahasa Indonesia" },
+  { value: "en", label: "English" },
+]
+
 function statusClass(status: string) {
   if (status === "published") return "bg-success/10 text-success border-transparent"
   if (status === "archived") return "bg-muted text-muted-foreground border-transparent"
   return "bg-warning/10 text-warning border-transparent"
 }
 
-function toNewsPayload(form: NewsFormState) {
+function fromTranslation(
+  tr?: Partial<LocaleContent> | null,
+  fallback?: Partial<NewsItem> | null
+): LocaleContent {
   return {
-    title: form.title.trim(),
-    body: form.body,
-    slug: form.slug.trim() || undefined,
-    excerpt: form.excerpt.trim() || null,
+    title: tr?.title ?? fallback?.title ?? "",
+    slug: tr?.slug ?? fallback?.slug ?? "",
+    excerpt: tr?.excerpt ?? fallback?.excerpt ?? "",
+    body: tr?.body ?? fallback?.body ?? "",
+    meta_title: tr?.meta_title ?? fallback?.meta_title ?? "",
+    meta_description: tr?.meta_description ?? fallback?.meta_description ?? "",
+  }
+}
+
+function isLocaleFilled(fields: LocaleContent) {
+  return Boolean(
+    fields.title.trim() ||
+      fields.slug.trim() ||
+      fields.excerpt.trim() ||
+      !isRichTextEmpty(fields.body) ||
+      fields.meta_title.trim() ||
+      fields.meta_description.trim()
+  )
+}
+
+function isLocaleComplete(fields: LocaleContent) {
+  return Boolean(fields.title.trim() && !isRichTextEmpty(fields.body))
+}
+
+function localePayload(fields: LocaleContent) {
+  return {
+    title: fields.title.trim(),
+    body: fields.body,
+    slug: fields.slug.trim() || undefined,
+    excerpt: fields.excerpt.trim() || null,
+    meta_title: fields.meta_title.trim() || null,
+    meta_description: fields.meta_description.trim() || null,
+  }
+}
+
+function toNewsPayload(form: NewsFormState) {
+  const translations: Record<string, ReturnType<typeof localePayload>> = {
+    id: localePayload(form.translations.id),
+  }
+  if (isLocaleFilled(form.translations.en)) {
+    translations.en = localePayload(form.translations.en)
+  }
+  return {
     category_id: form.category_id === "none" ? null : form.category_id,
     is_featured: form.is_featured,
-    meta_title: form.meta_title.trim() || null,
-    meta_description: form.meta_description.trim() || null,
+    translations,
   }
+}
+
+function detailToForm(detail: NewsItem): NewsFormState {
+  const tr = detail.translations || {}
+  return {
+    category_id: detail.category_id || "none",
+    is_featured: Boolean(detail.is_featured),
+    translations: {
+      id: fromTranslation(tr.id, detail),
+      en: fromTranslation(tr.en),
+    },
+  }
+}
+
+function validateNewsForm(form: NewsFormState): string | null {
+  if (!isLocaleComplete(form.translations.id)) {
+    return "Bahasa Indonesia: title and body are required."
+  }
+  if (isLocaleFilled(form.translations.en) && !isLocaleComplete(form.translations.en)) {
+    return "English: title and body are required when English content is provided."
+  }
+  return null
+}
+
+function toCategoryPayload(form: CategoryFormState) {
+  const translations: Record<string, { name: string; slug?: string }> = {
+    id: {
+      name: form.translations.id.name.trim(),
+      slug: form.translations.id.slug.trim() || undefined,
+    },
+  }
+  const enName = form.translations.en.name.trim()
+  if (enName) {
+    translations.en = {
+      name: enName,
+      slug: form.translations.en.slug.trim() || undefined,
+    }
+  }
+  return { translations }
 }
 
 export default function NewsPage() {
@@ -135,30 +253,33 @@ export default function NewsPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const debouncedSearch = useDebounce(searchQuery, 400)
   const [statusFilter, setStatusFilter] = useState("all")
+  const [listLocale, setListLocale] = useState<LocaleCode>("id")
   const [page, setPage] = useState(1)
   const pageSize = 10
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingNews, setEditingNews] = useState<NewsItem | null>(null)
-  const [formData, setFormData] = useState<NewsFormState>({ ...emptyNewsForm })
+  const [formData, setFormData] = useState<NewsFormState>(emptyNewsForm)
+  const [contentLocale, setContentLocale] = useState<LocaleCode>("id")
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [deletingNews, setDeletingNews] = useState<NewsItem | null>(null)
 
   const [categoryFormOpen, setCategoryFormOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<NewsCategory | null>(null)
-  const [categoryName, setCategoryName] = useState("")
-  const [categorySlug, setCategorySlug] = useState("")
+  const [categoryForm, setCategoryForm] = useState<CategoryFormState>(emptyCategoryForm)
+  const [categoryLocale, setCategoryLocale] = useState<LocaleCode>("id")
   const [deletingCategory, setDeletingCategory] = useState<NewsCategory | null>(null)
 
   const listParams = useMemo(
     () => ({
       page,
       limit: pageSize,
+      locale: listLocale,
       ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
       ...(statusFilter !== "all" ? { status: statusFilter } : {}),
     }),
-    [page, pageSize, debouncedSearch, statusFilter]
+    [page, pageSize, listLocale, debouncedSearch, statusFilter]
   )
 
   const { data: newsResponse, isLoading: newsLoading } = useQuery({
@@ -175,14 +296,36 @@ export default function NewsPage() {
   const newsRows = newsResponse?.data || []
   const totalNews = getTotalFromMeta(newsResponse?.meta)
 
-  const { data: categories = [], isLoading: categoriesLoading } = useQuery<NewsCategory[]>({
-    queryKey: ["news-categories"],
+  const { data: categoriesId = [], isLoading: categoriesLoading } = useQuery<NewsCategory[]>({
+    queryKey: ["news-categories", "id"],
     queryFn: async () => {
-      const res = await apiClient.get("/news-categories")
+      const res = await apiClient.get("/news-categories", { params: { locale: "id" } })
       const body = res.data?.data
       return Array.isArray(body) ? body : body?.data || []
     },
   })
+
+  const { data: categoriesEn = [] } = useQuery<NewsCategory[]>({
+    queryKey: ["news-categories", "en"],
+    queryFn: async () => {
+      const res = await apiClient.get("/news-categories", { params: { locale: "en" } })
+      const body = res.data?.data
+      return Array.isArray(body) ? body : body?.data || []
+    },
+  })
+
+  const categories = useMemo(() => {
+    const enById = new Map(categoriesEn.map((c) => [c.id, c]))
+    return categoriesId.map((cat) => ({
+      ...cat,
+      translations: {
+        id: { name: cat.name, slug: cat.slug },
+        en: enById.has(cat.id)
+          ? { name: enById.get(cat.id)!.name, slug: enById.get(cat.id)!.slug }
+          : undefined,
+      },
+    }))
+  }, [categoriesId, categoriesEn])
 
   useEffect(() => {
     return () => {
@@ -195,9 +338,20 @@ export default function NewsPage() {
     queryClient.invalidateQueries({ queryKey: ["news-categories"] })
   }
 
+  const updateLocaleFields = (locale: LocaleCode, patch: Partial<LocaleContent>) => {
+    setFormData((prev) => ({
+      ...prev,
+      translations: {
+        ...prev.translations,
+        [locale]: { ...prev.translations[locale], ...patch },
+      },
+    }))
+  }
+
   const openCreate = () => {
     setEditingNews(null)
-    setFormData({ ...emptyNewsForm })
+    setFormData(emptyNewsForm())
+    setContentLocale("id")
     setCoverFile(null)
     setCoverPreview(null)
     setFormOpen(true)
@@ -207,35 +361,43 @@ export default function NewsPage() {
     setEditingNews(item)
     setCoverFile(null)
     setCoverPreview(item.cover_url ? resolveUploadUrl(item.cover_url) : null)
+    setContentLocale("id")
+    setFormData(detailToForm(item))
     setFormOpen(true)
     try {
       const res = await apiClient.get(`/admin/news/${item.id}`)
       const detail = (res.data?.data || res.data) as NewsItem
       setEditingNews(detail)
-      setFormData({
-        title: detail.title || "",
-        slug: detail.slug || "",
-        excerpt: detail.excerpt || "",
-        body: detail.body || "",
-        category_id: detail.category_id || "none",
-        is_featured: Boolean(detail.is_featured),
-        meta_title: detail.meta_title || "",
-        meta_description: detail.meta_description || "",
-      })
+      setFormData(detailToForm(detail))
       setCoverPreview(detail.cover_url ? resolveUploadUrl(detail.cover_url) : null)
     } catch {
-      setFormData({
-        title: item.title || "",
-        slug: item.slug || "",
-        excerpt: item.excerpt || "",
-        body: "",
-        category_id: item.category_id || "none",
-        is_featured: Boolean(item.is_featured),
-        meta_title: item.meta_title || "",
-        meta_description: item.meta_description || "",
-      })
-      toast.error("Failed to load full article body.")
+      toast.error("Failed to load full article translations.")
     }
+  }
+
+  const openCreateCategory = () => {
+    setEditingCategory(null)
+    setCategoryForm(emptyCategoryForm())
+    setCategoryLocale("id")
+    setCategoryFormOpen(true)
+  }
+
+  const openEditCategory = (item: NewsCategory) => {
+    setEditingCategory(item)
+    setCategoryLocale("id")
+    setCategoryForm({
+      translations: {
+        id: {
+          name: item.translations?.id?.name || item.name || "",
+          slug: item.translations?.id?.slug || item.slug || "",
+        },
+        en: {
+          name: item.translations?.en?.name || "",
+          slug: item.translations?.en?.slug || "",
+        },
+      },
+    })
+    setCategoryFormOpen(true)
   }
 
   const uploadCover = async (newsId: string, file: File) => {
@@ -247,12 +409,33 @@ export default function NewsPage() {
     return (res.data?.data || res.data) as NewsItem
   }
 
+  const syncFormFromNews = (news: NewsItem) => {
+    setEditingNews(news)
+    if (news.translations) {
+      setFormData(detailToForm(news))
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        category_id: news.category_id || prev.category_id,
+        is_featured: news.is_featured ?? prev.is_featured,
+        translations: {
+          ...prev.translations,
+          id: {
+            ...prev.translations.id,
+            slug: news.slug || prev.translations.id.slug,
+            title: news.title || prev.translations.id.title,
+          },
+        },
+      }))
+    }
+    setCoverPreview(news.cover_url ? resolveUploadUrl(news.cover_url) : null)
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const error = validateNewsForm(formData)
+      if (error) throw new Error(error)
       const payload = toNewsPayload(formData)
-      if (!payload.title || isRichTextEmpty(payload.body)) {
-        throw new Error("Title and body are required.")
-      }
       let news: NewsItem
       if (editingNews?.id) {
         const res = await apiClient.put(`/admin/news/${editingNews.id}`, payload)
@@ -264,17 +447,20 @@ export default function NewsPage() {
       if (coverFile && news?.id) {
         news = await uploadCover(news.id, coverFile)
       }
+      if (news?.id) {
+        try {
+          const detailRes = await apiClient.get(`/admin/news/${news.id}`)
+          news = detailRes.data?.data || detailRes.data || news
+        } catch {
+          /* keep save response */
+        }
+      }
       return news
     },
     onSuccess: (news) => {
       invalidateNews()
-      setEditingNews(news)
       setCoverFile(null)
-      setCoverPreview(news.cover_url ? resolveUploadUrl(news.cover_url) : null)
-      setFormData((prev) => ({
-        ...prev,
-        slug: news.slug || prev.slug,
-      }))
+      syncFormFromNews(news)
       toast.success(editingNews ? "Article saved." : "Draft created.")
     },
     onError: (error: any) => {
@@ -284,21 +470,27 @@ export default function NewsPage() {
 
   const publishMutation = useMutation({
     mutationFn: async (id: string) => {
-      // Persist latest form before publish
+      const error = validateNewsForm(formData)
+      if (error) throw new Error(error)
       const payload = toNewsPayload(formData)
       await apiClient.put(`/admin/news/${id}`, payload)
       if (coverFile) await uploadCover(id, coverFile)
       const res = await apiClient.put(`/admin/news/${id}/publish`)
       return res.data?.data || res.data
     },
-    onSuccess: (news: NewsItem) => {
+    onSuccess: async (news: NewsItem) => {
       invalidateNews()
-      setEditingNews(news)
       setCoverFile(null)
+      try {
+        const detailRes = await apiClient.get(`/admin/news/${news.id}`)
+        syncFormFromNews(detailRes.data?.data || detailRes.data || news)
+      } catch {
+        syncFormFromNews(news)
+      }
       toast.success("Article published.")
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || "Failed to publish article.")
+      toast.error(error?.message || error.response?.data?.message || "Failed to publish article.")
     },
   })
 
@@ -332,11 +524,14 @@ export default function NewsPage() {
 
   const saveCategoryMutation = useMutation({
     mutationFn: async () => {
-      const payload = {
-        name: categoryName.trim(),
-        slug: categorySlug.trim() || undefined,
+      const idName = categoryForm.translations.id.name.trim()
+      if (!idName) throw new Error("Bahasa Indonesia: category name is required.")
+      const enName = categoryForm.translations.en.name.trim()
+      const enSlug = categoryForm.translations.en.slug.trim()
+      if (enSlug && !enName) {
+        throw new Error("English: category name is required when English slug is provided.")
       }
-      if (!payload.name) throw new Error("Category name is required.")
+      const payload = toCategoryPayload(categoryForm)
       if (editingCategory?.id) {
         const res = await apiClient.put(`/admin/news-categories/${editingCategory.id}`, payload)
         return res.data?.data
@@ -348,8 +543,7 @@ export default function NewsPage() {
       queryClient.invalidateQueries({ queryKey: ["news-categories"] })
       setCategoryFormOpen(false)
       setEditingCategory(null)
-      setCategoryName("")
-      setCategorySlug("")
+      setCategoryForm(emptyCategoryForm())
       toast.success(editingCategory ? "Category updated." : "Category created.")
     },
     onError: (error: any) => {
@@ -386,8 +580,8 @@ export default function NewsPage() {
             )}
           </div>
           <div className="min-w-0">
-            <div className="font-medium truncate">{item.title}</div>
-            <div className="text-xs text-muted-foreground truncate">/{item.slug}</div>
+            <div className="font-medium truncate">{item.title || "—"}</div>
+            <div className="text-xs text-muted-foreground truncate">/{item.slug || "—"}</div>
           </div>
         </div>
       ),
@@ -448,7 +642,16 @@ export default function NewsPage() {
   const categoryColumns: ColumnDef<NewsCategory>[] = [
     {
       header: "Name",
-      cell: (item) => <span className="font-medium">{item.name}</span>,
+      cell: (item) => (
+        <div className="min-w-0">
+          <div className="font-medium">{item.name}</div>
+          {item.translations?.en?.name && (
+            <div className="text-xs text-muted-foreground truncate">
+              EN: {item.translations.en.name}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       header: "Slug",
@@ -459,16 +662,7 @@ export default function NewsPage() {
       className: "text-right",
       cell: (item) => (
         <div className="flex justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setEditingCategory(item)
-              setCategoryName(item.name)
-              setCategorySlug(item.slug)
-              setCategoryFormOpen(true)
-            }}
-          >
+          <Button variant="ghost" size="sm" onClick={() => openEditCategory(item)}>
             <Edit2 className="h-4 w-4" />
           </Button>
           <Button
@@ -484,7 +678,10 @@ export default function NewsPage() {
     },
   ]
 
-  const bodyValid = !isRichTextEmpty(formData.body)
+  const idValid = isLocaleComplete(formData.translations.id)
+  const enOk =
+    !isLocaleFilled(formData.translations.en) || isLocaleComplete(formData.translations.en)
+  const formValid = idValid && enOk
 
   const busy =
     saveMutation.isPending || publishMutation.isPending || archiveMutation.isPending
@@ -494,7 +691,8 @@ export default function NewsPage() {
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-bold tracking-tight">News</h2>
         <p className="text-muted-foreground">
-          Manage portal articles, covers, SEO metadata, and categories.
+          Manage portal articles in Bahasa Indonesia and English. Cover, status, and category are
+          shared across locales.
         </p>
       </div>
 
@@ -534,6 +732,24 @@ export default function NewsPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select
+                value={listLocale}
+                onValueChange={(value) => {
+                  setListLocale(value as LocaleCode)
+                  setPage(1)
+                }}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="List language" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LIST_LOCALE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      List: {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <Button onClick={openCreate}>
               <Plus className="h-4 w-4 mr-2" />
@@ -545,7 +761,8 @@ export default function NewsPage() {
             <CardHeader className="px-0 pt-0">
               <CardTitle>Articles</CardTitle>
               <CardDescription>
-                New posts start as drafts. Publish when ready; archive to hide from the public site.
+                Titles follow the selected list language. New posts start as drafts; publish when
+                Indonesian content is complete.
               </CardDescription>
             </CardHeader>
             <CardContent className="px-0">
@@ -566,14 +783,7 @@ export default function NewsPage() {
 
         <TabsContent value="categories" className="mt-4 space-y-4">
           <div className="flex justify-end">
-            <Button
-              onClick={() => {
-                setEditingCategory(null)
-                setCategoryName("")
-                setCategorySlug("")
-                setCategoryFormOpen(true)
-              }}
-            >
+            <Button onClick={openCreateCategory}>
               <Plus className="h-4 w-4 mr-2" />
               New category
             </Button>
@@ -581,7 +791,9 @@ export default function NewsPage() {
           <Card className="border-none shadow-sm">
             <CardHeader className="px-0 pt-0">
               <CardTitle>Categories</CardTitle>
-              <CardDescription>Used to group public news articles.</CardDescription>
+              <CardDescription>
+                Category names can be localized; Indonesian name is required.
+              </CardDescription>
             </CardHeader>
             <CardContent className="px-0">
               <DataTable
@@ -594,7 +806,6 @@ export default function NewsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Article form */}
       <Dialog
         open={formOpen}
         onOpenChange={(open) => {
@@ -608,7 +819,8 @@ export default function NewsPage() {
           <DialogHeader>
             <DialogTitle>{editingNews ? "Edit article" : "New article"}</DialogTitle>
             <DialogDescription>
-              Title and body are required. Slug is optional (auto-generated from title).
+              Indonesian title and body are required. English is optional. Cover, category, and
+              featured flag are shared.
             </DialogDescription>
           </DialogHeader>
 
@@ -624,28 +836,9 @@ export default function NewsPage() {
               </div>
             )}
 
-            <div className="grid gap-2">
-              <Label htmlFor="news-title">Title</Label>
-              <Input
-                id="news-title"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="news-slug">Slug (optional)</Label>
-              <Input
-                id="news-slug"
-                value={formData.slug}
-                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
-                placeholder="auto-from-title"
-              />
-            </div>
-
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label>Category</Label>
+                <Label>Category (shared)</Label>
                 <Select
                   value={formData.category_id}
                   onValueChange={(value) => setFormData({ ...formData, category_id: value })}
@@ -673,57 +866,13 @@ export default function NewsPage() {
                       setFormData({ ...formData, is_featured: e.target.checked })
                     }
                   />
-                  Featured article
+                  Featured article (shared)
                 </label>
               </div>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="news-excerpt">Excerpt</Label>
-              <Textarea
-                id="news-excerpt"
-                rows={2}
-                value={formData.excerpt}
-                onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Body</Label>
-              <RichTextEditor
-                key={editingNews?.id || "new"}
-                value={formData.body}
-                onChange={(html) => setFormData({ ...formData, body: html })}
-                placeholder="Write the article content…"
-                disabled={busy}
-              />
-            </div>
-
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="meta-title">SEO meta title</Label>
-                <Input
-                  id="meta-title"
-                  maxLength={255}
-                  value={formData.meta_title}
-                  onChange={(e) => setFormData({ ...formData, meta_title: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="meta-description">SEO meta description</Label>
-                <Input
-                  id="meta-description"
-                  maxLength={500}
-                  value={formData.meta_description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, meta_description: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="news-cover">Cover image</Label>
+              <Label htmlFor="news-cover">Cover image (shared)</Label>
               <div className="flex flex-col sm:flex-row gap-3 items-start">
                 <div className="h-28 w-44 rounded-md border bg-muted overflow-hidden flex items-center justify-center shrink-0">
                   {coverPreview ? (
@@ -741,17 +890,118 @@ export default function NewsPage() {
                       const file = e.target.files?.[0] || null
                       setCoverFile(file)
                       if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview)
-                      setCoverPreview(file ? URL.createObjectURL(file) : editingNews?.cover_url
-                        ? resolveUploadUrl(editingNews.cover_url)
-                        : null)
+                      setCoverPreview(
+                        file
+                          ? URL.createObjectURL(file)
+                          : editingNews?.cover_url
+                            ? resolveUploadUrl(editingNews.cover_url)
+                            : null
+                      )
                     }}
                   />
                   <p className="text-xs text-muted-foreground">
-                    JPEG/PNG/WebP, max 5MB. Uploaded via multipart field <code>cover</code>.
+                    JPEG/PNG/WebP, max 5MB. One cover for all languages.
                   </p>
                 </div>
               </div>
             </div>
+
+            <Tabs
+              value={contentLocale}
+              onValueChange={(value) => setContentLocale(value as LocaleCode)}
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="id">
+                  Bahasa Indonesia
+                  <span className="ml-1 text-[10px] text-muted-foreground">required</span>
+                </TabsTrigger>
+                <TabsTrigger value="en">
+                  English
+                  <span className="ml-1 text-[10px] text-muted-foreground">optional</span>
+                </TabsTrigger>
+              </TabsList>
+
+              {(["id", "en"] as LocaleCode[]).map((locale) => (
+                <TabsContent key={locale} value={locale} className="mt-4 space-y-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor={`news-title-${locale}`}>
+                      Title {locale === "id" ? "*" : ""}
+                    </Label>
+                    <Input
+                      id={`news-title-${locale}`}
+                      value={formData.translations[locale].title}
+                      onChange={(e) => updateLocaleFields(locale, { title: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor={`news-slug-${locale}`}>Slug (optional)</Label>
+                    <Input
+                      id={`news-slug-${locale}`}
+                      value={formData.translations[locale].slug}
+                      onChange={(e) => updateLocaleFields(locale, { slug: e.target.value })}
+                      placeholder="auto-from-title"
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor={`news-excerpt-${locale}`}>Excerpt</Label>
+                    <Textarea
+                      id={`news-excerpt-${locale}`}
+                      rows={2}
+                      value={formData.translations[locale].excerpt}
+                      onChange={(e) => updateLocaleFields(locale, { excerpt: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label>Body {locale === "id" ? "*" : ""}</Label>
+                    <RichTextEditor
+                      key={`${editingNews?.id || "new"}-${locale}`}
+                      value={formData.translations[locale].body}
+                      onChange={(html) => updateLocaleFields(locale, { body: html })}
+                      placeholder={
+                        locale === "id"
+                          ? "Tulis konten artikel…"
+                          : "Write the English article content…"
+                      }
+                      disabled={busy}
+                    />
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor={`meta-title-${locale}`}>SEO meta title</Label>
+                      <Input
+                        id={`meta-title-${locale}`}
+                        maxLength={255}
+                        value={formData.translations[locale].meta_title}
+                        onChange={(e) =>
+                          updateLocaleFields(locale, { meta_title: e.target.value })
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor={`meta-description-${locale}`}>SEO meta description</Label>
+                      <Input
+                        id={`meta-description-${locale}`}
+                        maxLength={500}
+                        value={formData.translations[locale].meta_description}
+                        onChange={(e) =>
+                          updateLocaleFields(locale, { meta_description: e.target.value })
+                        }
+                      />
+                    </div>
+                  </div>
+                </TabsContent>
+              ))}
+            </Tabs>
+
+            {!enOk && contentLocale === "en" && (
+              <p className="text-sm text-danger">
+                English title and body are both required once any English field is filled.
+              </p>
+            )}
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-between">
@@ -761,7 +1011,7 @@ export default function NewsPage() {
                   type="button"
                   variant="outline"
                   className="text-success"
-                  disabled={busy || !formData.title.trim() || !bodyValid}
+                  disabled={busy || !formValid}
                   onClick={() => publishMutation.mutate(editingNews.id)}
                 >
                   <Send className="h-4 w-4 mr-2" />
@@ -784,7 +1034,7 @@ export default function NewsPage() {
                   type="button"
                   variant="outline"
                   className="text-success"
-                  disabled={busy || !formData.title.trim() || !bodyValid}
+                  disabled={busy || !formValid}
                   onClick={() => publishMutation.mutate(editingNews.id)}
                 >
                   <Send className="h-4 w-4 mr-2" />
@@ -796,10 +1046,7 @@ export default function NewsPage() {
               <Button variant="outline" onClick={() => setFormOpen(false)}>
                 Close
               </Button>
-              <Button
-                disabled={busy || !formData.title.trim() || !bodyValid}
-                onClick={() => saveMutation.mutate()}
-              >
+              <Button disabled={busy || !formValid} onClick={() => saveMutation.mutate()}>
                 {saveMutation.isPending
                   ? "Saving..."
                   : editingNews
@@ -811,37 +1058,75 @@ export default function NewsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Category form */}
       <Dialog open={categoryFormOpen} onOpenChange={setCategoryFormOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingCategory ? "Edit category" : "New category"}</DialogTitle>
-            <DialogDescription>Slug is optional and derived from the name when empty.</DialogDescription>
+            <DialogDescription>
+              Indonesian name is required. English name is optional. Slug per locale is optional.
+            </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid gap-2">
-              <Label htmlFor="cat-name">Name</Label>
-              <Input
-                id="cat-name"
-                value={categoryName}
-                onChange={(e) => setCategoryName(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="cat-slug">Slug (optional)</Label>
-              <Input
-                id="cat-slug"
-                value={categorySlug}
-                onChange={(e) => setCategorySlug(e.target.value)}
-              />
-            </div>
-          </div>
+          <Tabs
+            value={categoryLocale}
+            onValueChange={(value) => setCategoryLocale(value as LocaleCode)}
+          >
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="id">Bahasa Indonesia</TabsTrigger>
+              <TabsTrigger value="en">English</TabsTrigger>
+            </TabsList>
+            {(["id", "en"] as LocaleCode[]).map((locale) => (
+              <TabsContent key={locale} value={locale} className="mt-4 space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor={`cat-name-${locale}`}>
+                    Name {locale === "id" ? "*" : ""}
+                  </Label>
+                  <Input
+                    id={`cat-name-${locale}`}
+                    value={categoryForm.translations[locale].name}
+                    onChange={(e) =>
+                      setCategoryForm((prev) => ({
+                        ...prev,
+                        translations: {
+                          ...prev.translations,
+                          [locale]: {
+                            ...prev.translations[locale],
+                            name: e.target.value,
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor={`cat-slug-${locale}`}>Slug (optional)</Label>
+                  <Input
+                    id={`cat-slug-${locale}`}
+                    value={categoryForm.translations[locale].slug}
+                    onChange={(e) =>
+                      setCategoryForm((prev) => ({
+                        ...prev,
+                        translations: {
+                          ...prev.translations,
+                          [locale]: {
+                            ...prev.translations[locale],
+                            slug: e.target.value,
+                          },
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCategoryFormOpen(false)}>
               Cancel
             </Button>
             <Button
-              disabled={saveCategoryMutation.isPending || !categoryName.trim()}
+              disabled={
+                saveCategoryMutation.isPending || !categoryForm.translations.id.name.trim()
+              }
               onClick={() => saveCategoryMutation.mutate()}
             >
               {saveCategoryMutation.isPending ? "Saving..." : "Save"}
@@ -885,7 +1170,9 @@ export default function NewsPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className={cn("bg-danger text-danger-foreground hover:bg-danger/90")}
-              onClick={() => deletingCategory && deleteCategoryMutation.mutate(deletingCategory.id)}
+              onClick={() =>
+                deletingCategory && deleteCategoryMutation.mutate(deletingCategory.id)
+              }
             >
               Delete
             </AlertDialogAction>
