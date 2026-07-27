@@ -23,4 +23,9 @@ Aturan ini menetapkan batasan ruang lingkup kerja agen terkait perubahan fronten
 
 ## Aturan
 1. **Hanya Fokus pada Super Admin**: Agen tidak diperbolehkan mengubah kode atau file apapun yang berada di direktori frontend dan backend. Terhadap direktori `../cari-kerja-frontend` dan `../cari-kerja-backend` (path relatif dari root workspace), agen hanya diberikan akses **Read-Only** (hanya untuk membaca dan memahami konteks), tanpa izin untuk menambah, memodifikasi, atau menghapus file apa pun.
-2. **Berikan Instruksi Khusus**: Jika ada perubahan fitur yang memerlukan penyesuaian di frontend atau backend, agen harus mendeskripsikan secara spesifik apa saja yang perlu dilakukan pada sisi frontend atau backend, dan menyerahkannya sebagai **Instruksi untuk Agen Frontend dan Backend** yang dapat disalin oleh pengguna.
+2. **Instruksi terpisah per agen**: Jika fitur membutuhkan penyesuaian di frontend dan/atau backend, keluarkan blok yang **bisa disalin terpisah**:
+   - `## Instruksi untuk Agen Backend` — hanya untuk repo `cari-kerja-backend`
+   - `## Instruksi untuk Agen Frontend` — hanya untuk repo `cari-kerja-frontend`
+   - Jangan gabungkan dalam satu heading "Frontend dan Backend".
+   - Jika hanya satu sisi terdampak, hanya keluarkan blok yang relevan.
+   - Setiap blok harus mandiri (konteks, perubahan, acceptance) tanpa bergantung pada blok agen lain.

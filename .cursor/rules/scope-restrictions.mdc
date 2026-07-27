@@ -14,21 +14,39 @@ alwaysApply: true
 
 ## Jika butuh perubahan di frontend/backend
 
-Jangan modifikasi repo tersebut. Sebaliknya, berikan blok **Instruksi untuk Agen Frontend dan Backend** yang spesifik dan bisa disalin user, mencakup:
+Jangan modifikasi repo tersebut. Berikan instruksi yang **terpisah per agen** agar bisa langsung di-copy ke chat agen project yang bersangkutan tanpa konteks campur.
 
-- Endpoint/API yang dibutuhkan (method, path, payload, response)
-- Komponen/halaman yang perlu diubah
-- Perilaku UI yang diharapkan
-- Edge case dan validasi
+Aturan format:
+- Pakai **dua heading terpisah** (bukan satu blok campuran):
+  - `## Instruksi untuk Agen Backend` — hanya repo `cari-kerja-backend`
+  - `## Instruksi untuk Agen Frontend` — hanya repo `cari-kerja-frontend`
+- **Jangan** satukan keduanya di bawah "Frontend dan Backend".
+- Jika hanya satu sisi yang perlu diubah, **hanya** keluarkan heading yang relevan.
+- Setiap blok harus self-contained: konteks singkat, file/endpoint, perilaku, acceptance — tanpa merujuk "lihat bagian atas/bawah untuk agen lain".
 
-Contoh format output:
+### Backend (isi tipikal)
+- Endpoint/API (method, path, payload, response)
+- Query/migration/domain yang terdampak
+- Edge case & validasi
+
+### Frontend (isi tipikal)
+- Halaman/komponen yang diubah
+- API yang dikonsumsi (`?locale=`, fields, dll.)
+- Perilaku UI & edge case
+
+Contoh output:
 
 ```
-## Instruksi untuk Agen Frontend dan Backend
+## Instruksi untuk Agen Backend
 
-### Backend
-- Tambah endpoint `GET /api/...` dengan response `{ ... }`
+**Repo:** `cari-kerja-backend`
+**Konteks:** Admin work experience list belum mengembalikan taxonomy fields.
 
-### Frontend
-- Di halaman X, tampilkan kolom Y dari response tersebut
+- Update `getWorkerWorkExperiences` agar SELECT menyertakan `job_title_id` dan `job_title_ref` (JOIN `job_titles`).
+- Acceptance: `GET /admin/workers/:id/work-experiences` item punya `job_title_id` + `job_title_ref.name`.
+
+## Instruksi untuk Agen Frontend
+
+**Repo:** `cari-kerja-frontend`
+**Konteks:** (hanya jika ada perubahan FE publik — kalau tidak ada, jangan buat blok ini)
 ```
