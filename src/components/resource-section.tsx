@@ -31,6 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { JobTitleAutocomplete } from "@/components/job-title-autocomplete"
 
 export interface FieldOption {
   value: string
@@ -40,7 +41,7 @@ export interface FieldOption {
 export interface FieldDef {
   name: string
   label: string
-  type: "text" | "textarea" | "date" | "number" | "checkbox" | "select"
+  type: "text" | "textarea" | "date" | "number" | "checkbox" | "select" | "job_title"
   options?: FieldOption[]
   placeholder?: string
   required?: boolean
@@ -73,9 +74,14 @@ interface ResourceSectionProps {
 }
 
 function defaultValues(fields: FieldDef[]): Record<string, any> {
-  return Object.fromEntries(
-    fields.map((f) => [f.name, f.type === "checkbox" ? false : ""])
-  )
+  const values: Record<string, any> = {}
+  for (const f of fields) {
+    values[f.name] = f.type === "checkbox" ? false : ""
+    if (f.type === "job_title") {
+      values.job_title_id = ""
+    }
+  }
+  return values
 }
 
 export function ResourceSection({
@@ -273,7 +279,21 @@ export function ResourceSection({
             {fields.map((field) => (
               <div key={field.name} className={field.type === "checkbox" ? "flex items-center gap-2" : "grid gap-2"}>
                 {field.type !== "checkbox" && <Label htmlFor={`rs-${field.name}`}>{field.label}</Label>}
-                {field.type === "textarea" ? (
+                {field.type === "job_title" ? (
+                  <JobTitleAutocomplete
+                    id={`rs-${field.name}`}
+                    value={String(formValues[field.name] ?? "")}
+                    jobTitleId={formValues.job_title_id || null}
+                    placeholder={field.placeholder || "Search or type a job title…"}
+                    onChange={({ job_title, job_title_id }) =>
+                      setFormValues({
+                        ...formValues,
+                        [field.name]: job_title,
+                        job_title_id: job_title_id || "",
+                      })
+                    }
+                  />
+                ) : field.type === "textarea" ? (
                   <Textarea
                     id={`rs-${field.name}`}
                     value={formValues[field.name] ?? ""}
@@ -363,6 +383,12 @@ function buildPayload(values: Record<string, any>, fields: FieldDef[]): Record<s
       payload[field.name] = !!raw
     } else if (field.type === "number") {
       payload[field.name] = raw === "" || raw === undefined ? null : Number(raw)
+    } else if (field.type === "job_title") {
+      payload.job_title = raw === "" || raw === undefined ? null : raw
+      payload.job_title_id =
+        values.job_title_id === "" || values.job_title_id === undefined
+          ? null
+          : values.job_title_id
     } else if (field.type === "select") {
       // Keep UUID / non-numeric IDs as strings; only coerce pure numeric lookup IDs.
       if (raw === "" || raw === undefined || raw === null) {
@@ -387,6 +413,9 @@ function extractValues(item: any, fields: FieldDef[]): Record<string, any> {
       values[field.name] = !!raw
     } else if (field.type === "date") {
       values[field.name] = raw ? new Date(raw).toISOString().split("T")[0] : ""
+    } else if (field.type === "job_title") {
+      values[field.name] = item.job_title_ref?.name || item.job_title || ""
+      values.job_title_id = item.job_title_id || item.job_title_ref?.id || ""
     } else {
       values[field.name] = raw ?? ""
     }

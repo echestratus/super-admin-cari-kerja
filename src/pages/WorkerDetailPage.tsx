@@ -169,12 +169,22 @@ export default function WorkerDetailPage() {
       header: "Position",
       sortKey: "job_title",
       sortable: true,
-      cell: (item) => (
-        <div>
-          <div className="font-medium">{item.job_title}</div>
-          <div className="text-sm text-muted-foreground">{item.company_name}</div>
-        </div>
-      ),
+      cell: (item) => {
+        const title = item.job_title_ref?.name || item.job_title
+        const hasCanonical =
+          item.job_title_ref?.name &&
+          item.job_title &&
+          item.job_title_ref.name !== item.job_title
+        return (
+          <div>
+            <div className="font-medium">{title}</div>
+            <div className="text-sm text-muted-foreground">{item.company_name}</div>
+            {hasCanonical && (
+              <div className="text-[11px] text-muted-foreground">Stored as: {item.job_title}</div>
+            )}
+          </div>
+        )
+      },
     },
     {
       header: "Period",
@@ -600,10 +610,16 @@ export default function WorkerDetailPage() {
             baseUrl={`/admin/workers/${id}/work-experiences`}
             queryKey={["worker-work-experiences", id]}
             columns={workExpColumns}
-            getItemLabel={(item) => `${item.job_title} at ${item.company_name}`}
+            getItemLabel={(item) =>
+              `${item.job_title_ref?.name || item.job_title} at ${item.company_name}`
+            }
             searchFields={[
               { key: "company_name", label: "Company", getValue: (item) => item.company_name },
-              { key: "job_title", label: "Job Title", getValue: (item) => item.job_title },
+              {
+                key: "job_title",
+                label: "Job Title",
+                getValue: (item) => item.job_title_ref?.name || item.job_title,
+              },
               { key: "description", label: "Description", getValue: (item) => item.description },
               { key: "start_date", label: "Start Date", getValue: (item) => item.start_date },
               { key: "end_date", label: "End Date", getValue: (item) => item.end_date },
@@ -617,7 +633,13 @@ export default function WorkerDetailPage() {
             defaultSortBy="start_date"
             fields={[
               { name: "company_name", label: "Company Name", type: "text", required: true },
-              { name: "job_title", label: "Job Title", type: "text", required: true },
+              {
+                name: "job_title",
+                label: "Job Title",
+                type: "job_title",
+                required: true,
+                placeholder: "Search taxonomy or type a new title…",
+              },
               { name: "start_date", label: "Start Date", type: "date", required: true },
               { name: "end_date", label: "End Date", type: "date" },
               { name: "is_current", label: "Currently working here", type: "checkbox" },
