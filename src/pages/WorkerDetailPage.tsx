@@ -84,6 +84,8 @@ export default function WorkerDetailPage() {
   const { data: proficiencyLevels } = useLookup("proficiency_levels")
   const { data: skills } = useLookup("skills")
   const { data: applicationStatuses } = useLookup("application_statuses")
+  const { data: jobCategories } = useLookup("categories")
+  const jobCategoryOptions = toLookupOptions(jobCategories)
 
   useEffect(() => {
     if (worker) {
@@ -171,6 +173,7 @@ export default function WorkerDetailPage() {
       sortable: true,
       cell: (item) => {
         const title = item.job_title_ref?.name || item.job_title
+        const categoryName = item.category_name
         const hasCanonical =
           item.job_title_ref?.name &&
           item.job_title &&
@@ -179,6 +182,12 @@ export default function WorkerDetailPage() {
           <div>
             <div className="font-medium">{title}</div>
             <div className="text-sm text-muted-foreground">{item.company_name}</div>
+            {categoryName && (
+              <div className="text-[11px] text-muted-foreground">
+                Category: {categoryName}
+                {item.category_id != null ? ` (#${item.category_id})` : ""}
+              </div>
+            )}
             {hasCanonical && (
               <div className="text-[11px] text-muted-foreground">Stored as: {item.job_title}</div>
             )}
@@ -620,6 +629,11 @@ export default function WorkerDetailPage() {
                 label: "Job Title",
                 getValue: (item) => item.job_title_ref?.name || item.job_title,
               },
+              {
+                key: "category_name",
+                label: "Category",
+                getValue: (item) => item.category_name,
+              },
               { key: "description", label: "Description", getValue: (item) => item.description },
               { key: "start_date", label: "Start Date", getValue: (item) => item.start_date },
               { key: "end_date", label: "End Date", getValue: (item) => item.end_date },
@@ -633,6 +647,14 @@ export default function WorkerDetailPage() {
             defaultSortBy="start_date"
             fields={[
               { name: "company_name", label: "Company Name", type: "text", required: true },
+              {
+                name: "category_id",
+                label: "Category",
+                type: "select",
+                required: true,
+                placeholder: "Select category",
+                options: jobCategoryOptions,
+              },
               {
                 name: "job_title",
                 label: "Job Title",

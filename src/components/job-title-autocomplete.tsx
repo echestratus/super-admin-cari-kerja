@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react"
 interface JobTitleAutocompleteProps {
   value: string
   jobTitleId?: string | null
+  categoryId?: number | string | null
   onChange: (next: { job_title: string; job_title_id: string | null }) => void
   placeholder?: string
   disabled?: boolean
@@ -20,6 +21,7 @@ interface JobTitleAutocompleteProps {
 export function JobTitleAutocomplete({
   value,
   jobTitleId,
+  categoryId,
   onChange,
   placeholder = "Search or type a job title…",
   disabled = false,
@@ -33,15 +35,22 @@ export function JobTitleAutocomplete({
   const [inputValue, setInputValue] = useState(value || "")
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({})
   const debouncedSearch = useDebounce(inputValue, 300)
+  const hasCategory = categoryId !== undefined && categoryId !== null && categoryId !== ""
+  const isDisabled = disabled || !hasCategory
 
   useEffect(() => {
     setInputValue(value || "")
   }, [value])
 
   const { data: options = [], isFetching } = useQuery({
-    queryKey: ["job-titles", debouncedSearch],
-    queryFn: () => searchJobTitles(debouncedSearch, 20),
-    enabled: open,
+    queryKey: ["job-titles", debouncedSearch, categoryId],
+    queryFn: () =>
+      searchJobTitles(debouncedSearch, {
+        limit: 20,
+        categoryId,
+        locale: "id",
+      }),
+    enabled: open && hasCategory,
     staleTime: 30_000,
   })
 
@@ -90,28 +99,31 @@ export function JobTitleAutocomplete({
         aria-expanded={open}
         aria-controls={listId}
         aria-autocomplete="list"
-        disabled={disabled}
-        placeholder={placeholder}
+        disabled={isDisabled}
+        placeholder={
+          hasCategory ? placeholder : "Select a category first…"
+        }
         value={inputValue}
         autoComplete="off"
-        onFocus={() => setOpen(true)}
+        onFocus={() => hasCategory && setOpen(true)}
         onChange={(e) => handleInputChange(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Escape") setOpen(false)
         }}
       />
-      {jobTitleId && (
+      {hasCategory && jobTitleId && (
         <p className="mt-1 text-[11px] text-muted-foreground">
           Linked to taxonomy id <code className="text-[10px]">{jobTitleId.slice(0, 8)}…</code>
         </p>
       )}
-      {!jobTitleId && inputValue.trim() && (
+      {hasCategory && !jobTitleId && inputValue.trim() && (
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Free text — backend will resolve or create on save.
+          Free text — backend will resolve or create under this category on save.
         </p>
       )}
 
       {open &&
+        hasCategory &&
         createPortal(
           <div
             id={listId}
@@ -128,8 +140,8 @@ export function JobTitleAutocomplete({
             {!isFetching && options.length === 0 && (
               <div className="px-3 py-2 text-xs text-muted-foreground">
                 {debouncedSearch.trim()
-                  ? "No matches — keep typing to create a new title on save."
-                  : "Type to search job titles."}
+                  ? "No matches in this category — keep typing to create a new title on save."
+                  : "Type to search job titles in this category."}
               </div>
             )}
             {options.map((option) => (

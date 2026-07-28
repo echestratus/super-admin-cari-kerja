@@ -284,6 +284,7 @@ export function ResourceSection({
                     id={`rs-${field.name}`}
                     value={String(formValues[field.name] ?? "")}
                     jobTitleId={formValues.job_title_id || null}
+                    categoryId={formValues.category_id || null}
                     placeholder={field.placeholder || "Search or type a job title…"}
                     onChange={({ job_title, job_title_id }) =>
                       setFormValues({
@@ -303,7 +304,18 @@ export function ResourceSection({
                 ) : field.type === "select" ? (
                   <Select
                     value={String(formValues[field.name] ?? "")}
-                    onValueChange={(v) => setFormValues({ ...formValues, [field.name]: v })}
+                    onValueChange={(v) => {
+                      const next: Record<string, any> = { ...formValues, [field.name]: v }
+                      // Changing category invalidates the selected/free-text job title
+                      if (
+                        field.name === "category_id" &&
+                        fields.some((f) => f.type === "job_title")
+                      ) {
+                        next.job_title = ""
+                        next.job_title_id = ""
+                      }
+                      setFormValues(next)
+                    }}
                   >
                     <SelectTrigger id={`rs-${field.name}`}>
                       <SelectValue placeholder={field.placeholder || `Select ${field.label.toLowerCase()}`} />
@@ -389,6 +401,10 @@ function buildPayload(values: Record<string, any>, fields: FieldDef[]): Record<s
         values.job_title_id === "" || values.job_title_id === undefined
           ? null
           : values.job_title_id
+      // Resolve/create title under this category (not stored on WE row)
+      if (values.category_id !== undefined && values.category_id !== "") {
+        payload.category_id = Number(values.category_id)
+      }
     } else if (field.type === "select") {
       // Keep UUID / non-numeric IDs as strings; only coerce pure numeric lookup IDs.
       if (raw === "" || raw === undefined || raw === null) {
@@ -416,6 +432,9 @@ function extractValues(item: any, fields: FieldDef[]): Record<string, any> {
     } else if (field.type === "job_title") {
       values[field.name] = item.job_title_ref?.name || item.job_title || ""
       values.job_title_id = item.job_title_id || item.job_title_ref?.id || ""
+    } else if (field.name === "category_id") {
+      const catId = item.category_id ?? item.job_title_ref?.category_id
+      values[field.name] = catId != null && catId !== "" ? String(catId) : ""
     } else {
       values[field.name] = raw ?? ""
     }
