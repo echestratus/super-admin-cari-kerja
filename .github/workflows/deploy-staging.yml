@@ -1,0 +1,62 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy super-admin-stage to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          protocol: tcp
+          timeout: 2m
+          script_stop: true
+          command_timeout: 25m
+          script: |
+            set -euo pipefail
+            PROJECT_DIR="/var/www/cari-kerja"
+            SUPER_ADMIN_DIR="super-admin-stage-cari-kerja"
+            SCRIPT_SRC="${PROJECT_DIR}/${SUPER_ADMIN_DIR}/scripts/deploy/staging-super-admin-remote.sh"
+
+            cd "$PROJECT_DIR"
+            # Ensure latest develop (includes deploy script) is on disk before invoking it.
+            git -C "$SUPER_ADMIN_DIR" fetch origin
+            git -C "$SUPER_ADMIN_DIR" checkout develop
+            git -C "$SUPER_ADMIN_DIR" pull --ff-only origin develop
+
+            if [[ -f "$SCRIPT_SRC" ]]; then
+              chmod +x "$SCRIPT_SRC"
+              bash "$SCRIPT_SRC"
+            else
+              echo "Deploy script missing after pull; running inline fallback"
+              docker compose up -d --build super-admin-stage
+              docker image prune -f
+              for i in $(seq 1 12); do
+                if curl -fsS https://su-stage.cari-kerja.co.id/ >/dev/null; then
+                  echo "Health OK"
+                  exit 0
+                fi
+                sleep 5
+              done
+              echo "Health check failed"
+              exit 1
+            fi
